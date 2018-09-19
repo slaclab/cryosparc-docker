@@ -1,0 +1,15 @@
+version: '3.3'
+services:
+  
+  cryosparc:
+    image: slaclab/cryosparc-docker
+    container_name: cryosparc
+    volumes:
+      - /tmp/mongodb/db:/var/lib/mongo/db
+      - /tmp/cryosparc/u:/u
+      - /tmp/cryosparc/exp:/exp
+    environment:
+      - CRYOSPARC_HTTP_PORT=8888
+      - JUPYTERHUB_SERVICE_PREFIX=/user/ytl/
+    ports:
+        - 8888:8888
