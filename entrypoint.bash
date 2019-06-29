@@ -149,23 +149,23 @@ fi
 
 
 # ensure we have a cryosparc directory under home
-export CRYOSPARC_DATADIR="${USER_HOMEDIR}/cryosparc-v2"
-if [[ ! -d "${CRYOSPARC_DATADIR}" ]]; then
-    echo "Creating cryosparc datadir ${CRYOSPARC_DATADIR}..."
-    echo mkdir -p ${CRYOSPARC_DATADIR}
-    mkdir -p ${CRYOSPARC_DATADIR} 
-    echo mkdir -p ${CRYOSPARC_DATADIR}/run
-    mkdir -p ${CRYOSPARC_DATADIR}/run
-    echo mkdir -p ${CRYOSPARC_DATADIR}/cryosparc2_database
-    mkdir -p ${CRYOSPARC_DATADIR}/cryosparc2_database
+export CRYOSPARC_DATADIR=${USER_HOMEDIR}/cryosparc-v2
+echo "Creating cryosparc datadir ${CRYOSPARC_DATADIR}..."
+echo mkdir -p ${CRYOSPARC_DATADIR}
+mkdir -p ${CRYOSPARC_DATADIR} 
+echo mkdir -p ${CRYOSPARC_DATADIR}/run
+mkdir -p ${CRYOSPARC_DATADIR}/run
+echo mkdir -p ${CRYOSPARC_DATADIR}/cryosparc2_database
+mkdir -p ${CRYOSPARC_DATADIR}/cryosparc2_database
 
+if [[ ! -e "${CRYOSPARC_DATADIR}/config.sh" ]]; then
     # copy config
     echo mv ${CRYOSPARC_MASTER_DIR}/config.sh ${CRYOSPARC_DATADIR}/config.sh
     mv ${CRYOSPARC_MASTER_DIR}/config.sh ${CRYOSPARC_DATADIR}/config.sh
-    
-    echo chown -R ${U_NAME} ${CRYOSPARC_DATADIR}
-    chown -R ${U_NAME} ${CRYOSPARC_DATADIR}
 fi
+    
+echo chown -R ${U_NAME} ${CRYOSPARC_DATADIR}
+chown -R ${U_NAME} ${CRYOSPARC_DATADIR}
 
 
 echo ln -sf ${CRYOSPARC_DATADIR}/config.sh ${CRYOSPARC_MASTER_DIR}/config.sh
@@ -182,6 +182,13 @@ chown ${U_NAME} ${CRYOSPARC_WORKER_DIR}/
 
 cat ${CRYOSPARC_MASTER_DIR}/config.sh
 ls -lah ${CRYOSPARC_MASTER_DIR}
+
+# change code
+sed -i 's:    disk_has_space=.*:    disk_has_space="true":g' /app/cryosparc2_master/bin/cryosparcm
+
+# gui changes
+#sed -i 's|"url": "/fonts/woff|"url": "/user/ytl/proxy/absolute/39000/fonts/woff/|g' /app/cryosparc2_master/cryosparc2_webapp/bundle/programs/web.browser/program.json
+chmod -R ugo+rwx /app/cryosparc2_master/cryosparc2_webapp/bundle/
 
 # down privs to user
 echo exec ${sudo} /cryosparc.sh

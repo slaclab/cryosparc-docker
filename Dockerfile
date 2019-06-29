@@ -1,12 +1,20 @@
-FROM nvidia/cuda:9.1-devel-ubuntu16.04
+FROM nvidia/cuda:10.0-devel-ubuntu16.04
 
 ARG CRYOSPARC_LICENSE_ID
+
+ENV DEBIAN_FRONTEND noninteractive
+
+# need newer node
 
 RUN apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv 2930ADAE8CAF5059EE73BB4B58712A2291FA4AD5 \
   && echo "deb [ arch=amd64,arm64 ] https://repo.mongodb.org/apt/ubuntu xenial/mongodb-org/3.6 multiverse" | tee /etc/apt/sources.list.d/mongodb-org-3.6.list \
   && apt-get update \
   && apt-get install -y --no-install-recommends \
     python \
+    python3 \
+    python3-dev \
+    python3-setuptools \
+    python3-pip \
     libtiff5 \
     netbase \
     curl \
@@ -14,6 +22,9 @@ RUN apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv 2930ADAE8CAF505
     sudo \
     net-tools \
     openssh-server \
+    nginx \
+  && curl -sL https://deb.nodesource.com/setup_6.x | bash - \
+  && apt-get install -y nodejs \
   && rm -rf /var/lib/apt/lists/*
 RUN ln -s /usr/lib/x86_64-linux-gnu/libtiff.so.5 /usr/lib/x86_64-linux-gnu/libtiff.so.3
 
@@ -37,6 +48,26 @@ RUN cd ${CRYOSPARC_WORKER_DIR} && \
   bash ./install.sh --license ${CRYOSPARC_LICENSE_ID} --yes --cudapath /usr/local/cuda && \
   sed -i 's/^export CRYOSPARC_LICENSE_ID=.*$/export CRYOSPARC_LICENSE_ID=TBD/g' ${CRYOSPARC_WORKER_DIR}/config.sh
 
+# install cryosparc live
+ARG  CRYOSPARC_LIVE
+RUN  [ ! -z "$CRYOSPARC_LIVE" ] && cd ${CRYOSPARC_MASTER_DIR} && \
+  curl -L "https://get.cryosparc.com/download/master-${CRYOSPARC_LIVE}/$CRYOSPARC_LICENSE_ID" | tar -xz --overwrite --strip-components=1 --directory . && \
+  ${CRYOSPARC_MASTER_DIR}/bin/cryosparcm deps && \
+  sed -i 's/^export CRYOSPARC_LICENSE_ID=.*$/export CRYOSPARC_LICENSE_ID=TBD/g' ${CRYOSPARC_MASTER_DIR}/config.sh
+RUN  [ ! -z "$CRYOSPARC_LIVE" ] && cd ${CRYOSPARC_WORKER_DIR} && \
+  curl -L "https://get.cryosparc.com/download/worker-${CRYOSPARC_LIVE}/$CRYOSPARC_LICENSE_ID" | tar -xz --overwrite --strip-components=1 --directory . && \
+  ${CRYOSPARC_WORKER_DIR}/bin/cryosparcw deps && \
+  sed -i 's/^export CRYOSPARC_LICENSE_ID=.*$/export CRYOSPARC_LICENSE_ID=TBD/g' ${CRYOSPARC_WORKER_DIR}/config.sh
+
+# install jupyterlab
+#RUN  pip3 install --upgrade pip wheel
+#RUN  pip3 install jupyterlab jupyterlab_server jupyterhub jupyter-server-proxy
+#RUN  jupyter serverextension enable jupyter_server_proxy --py --sys-prefix \
+#  && jupyter labextension install jupyterlab-server-proxy --no-build \
+#  && jupyter labextension enable jupyterlab-server-proxy \
+#  && jupyter labextension install @lsst-sqre/jupyterlab-savequit \
+#  && jupyter labextension enable @lsst-sqre/jupyterlab-savequit
+
 COPY entrypoint.bash /entrypoint.bash
 COPY cryosparc.sh /cryosparc.sh
 
@@ -45,5 +76,6 @@ EXPOSE 39001
 EXPOSE 39002
 EXPOSE 39003
 EXPOSE 39004
+EXPOSE 39006
 
 ENTRYPOINT /entrypoint.bash
