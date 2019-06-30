@@ -1,0 +1,42 @@
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: cryosparc-${USER}
+  labels:
+    name: cryosparc-${USER}
+spec:
+  type: ClusterIP
+  ports:
+  - name: http
+    port: 39000
+    protocol: TCP
+  selector:
+    name: cryosparc-${USER}
+
+---
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: cryosparc-${USER}
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "30s"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "20s"
+    nginx.ingress.kubernetes.io/client-max-body-size: "50m"
+    nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+spec:
+  tls:
+    - hosts:
+      - cryosparc.slac.stanford.edu
+      secretName: tls-certificate
+  rules:
+    - host: cryosparc.slac.stanford.edu
+      http:
+        paths:
+        - path: /${USER}
+          backend:
+            serviceName: cryosparc-${USER}
+            servicePort: 39000
+
+

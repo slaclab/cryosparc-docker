@@ -1,0 +1,4 @@
+namespace=cryosparc-prod
+nodeSelectors="storage/cryoem=true group/cryoem=true accelerator=nvidia"
+cryosparc_image=slaclab/cryosparc-live
+cryosparc_version=2.9.1-0

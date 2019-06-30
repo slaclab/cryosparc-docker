@@ -1,0 +1,67 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cryosparc-${USER}
+  labels:
+    app: cryosparc-${USER}
+spec:
+  selector:
+    matchLabels:
+      app: cryosparc-${USER}
+  template:
+    metadata:
+      labels:
+        app: cryosparc-${USER}
+    spec:
+      nodeSelector:
+$(list=(${nodeSelectors// / }); for k in "${!list[@]}"; do kv=(${list[k]//\=/ }); echo "        ${kv[0]}: ${kv[1]}"; done)
+      containers:
+      - image: ${cryosparc_image}:${cryosparc_version}
+        name: cryosparc
+        env:
+        - name: CRYOSPARC_LICENSE_ID
+          value: ${CRYOSPARC_LICENSE_ID}
+        - name: JUPYTERHUB_USER
+          value: ${USER}
+        - name: EXTERNAL_UID
+          value: ${EXTERNAL_UID}
+        - name: EXTERNAL_GROUPS
+          value: ${EXTERNAL_GROUPS}
+        - name: HOMEDIRS
+          value: /gpfs/slac/cryo/fs1/u/
+        ports:
+        - containerPort: 39000
+        - containerPort: 39001
+        - containerPort: 39002
+        - containerPort: 39003
+        - containerPort: 39004
+        - containerPort: 39005
+        - containerPort: 39006
+        volumeMounts:
+        - name: gpfs-home
+          mountPath: /gpfs/slac/cryo/fs1/u/
+        - name: gpfs-exp
+          mountPath: /gpfs/slac/cryo/fs1/exp/
+        - name: gpfs-g
+          mountPath: /gpfs/slac/cryo/fs1/g/
+        - name: scratch
+          mountPath: /scratch/
+        - name: tmp
+          mountPath: /tmp/
+      volumes:
+      - name: gpfs
+        persistentVolumeClaim:
+          claimName: ${namespace}--gpfs-home
+      - name: gpfs
+        persistentVolumeClaim:
+          claimName: ${namespace}--gpfs-exp
+      - name: gpfs
+        persistentVolumeClaim:
+          claimName: ${namespace}--gpfs-g
+      - name: scratch
+        persistentVolumeClaim:
+          claimName: ${namespace}--scratch
+      - name: tmp
+        persistentVolumeClaim:
+          claimName: ${namespace}--tmp
+

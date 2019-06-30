@@ -1,0 +1,155 @@
+---
+
+kind: PersistentVolume
+apiVersion: v1
+metadata:
+  name: ${namespace}--gpfs-home
+  labels:
+    type: local
+spec:
+  storageClassName: ${namespace}--gpfs-home
+  capacity:
+    storage: 10000Gi
+  accessModes:
+    - ReadWriteMany
+  hostPath:
+    path: /gpfs/slac/cryo/fs1/u/
+
+---
+
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: gpfs-home
+spec:
+  storageClassName: ${namespace}--gpfs-home
+  accessModes:
+    - "ReadWriteMany"
+  resources:
+    requests:
+      storage: 100Gi
+
+---
+
+kind: PersistentVolume
+apiVersion: v1
+metadata:
+  name: ${namespace}--gpfs-exp
+  labels:
+    type: local
+spec:
+  storageClassName: ${namespace}--gpfs-exp
+  capacity:
+    storage: 10000Gi
+  accessModes:
+    - ReadWriteMany
+  hostPath:
+    path: /gpfs/slac/cryo/fs1/exp/
+
+---
+
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: gpfs-exp
+spec:
+  storageClassName: ${namespace}--gpfs-exp
+  accessModes:
+    - "ReadWriteMany"
+  resources:
+    requests:
+      storage: 100Gi
+
+---
+
+kind: PersistentVolume
+apiVersion: v1
+metadata:
+  name: ${namespace}--gpfs-g
+  labels:
+    type: local
+spec:
+  storageClassName: ${namespace}--gpfs-g
+  capacity:
+    storage: 10000Gi
+  accessModes:
+    - ReadWriteMany
+  hostPath:
+    path: /gpfs/slac/cryo/fs1/g/
+
+---
+
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: gpfs-g
+spec:
+  storageClassName: ${namespace}--gpfs-g
+  accessModes:
+    - "ReadWriteMany"
+  resources:
+    requests:
+      storage: 100Gi
+
+
+---
+
+kind: PersistentVolume
+apiVersion: v1
+metadata:
+  name: ${namespace}--scratch
+  labels:
+    type: local
+spec:
+  storageClassName: ${namespace}--scratch
+  capacity:
+    storage: 10000Gi
+  accessModes:
+    - ReadWriteMany
+  hostPath:
+    path: /scratch/
+
+---
+
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: scratch
+spec:
+  storageClassName: ${namespace}--scratch
+  accessModes:
+    - "ReadWriteMany"
+  resources:
+    requests:
+      storage: 100Gi
+
+---
+
+kind: PersistentVolume
+apiVersion: v1
+metadata:
+  name: ${namespace}--tmp
+  labels:
+    type: local
+spec:
+  storageClassName: ${namespace}--tmp
+  capacity:
+    storage: 10000Gi
+  accessModes:
+    - ReadWriteMany
+  hostPath:
+    path: /tmp/
+
+---
+
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: tmp
+spec:
+  storageClassName: ${namespace}--tmp
+  accessModes:
+    - "ReadWriteMany"
+  resources:
+    requests:
+      storage: 100Gi
