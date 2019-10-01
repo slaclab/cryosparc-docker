@@ -10,6 +10,7 @@ RUN apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv 2930ADAE8CAF505
   && echo "deb [ arch=amd64,arm64 ] https://repo.mongodb.org/apt/ubuntu xenial/mongodb-org/3.6 multiverse" | tee /etc/apt/sources.list.d/mongodb-org-3.6.list \
   && apt-get update \
   && apt-get install -y --no-install-recommends \
+    zip unzip \
     python \
     python3 \
     python3-dev \
@@ -22,7 +23,7 @@ RUN apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv 2930ADAE8CAF505
     sudo \
     net-tools \
     openssh-server \
-    nginx \
+    jq \
   && curl -sL https://deb.nodesource.com/setup_6.x | bash - \
   && apt-get install -y nodejs \
   && rm -rf /var/lib/apt/lists/*
@@ -50,14 +51,14 @@ RUN cd ${CRYOSPARC_WORKER_DIR} && \
 
 # install cryosparc live
 ARG  CRYOSPARC_LIVE
-RUN  [ ! -z "$CRYOSPARC_LIVE" ] && cd ${CRYOSPARC_MASTER_DIR} && \
+RUN  if [ ! -z $CRYOSPARC_LIVE ]; then cd ${CRYOSPARC_MASTER_DIR} && \
   curl -L "https://get.cryosparc.com/download/master-${CRYOSPARC_LIVE}/$CRYOSPARC_LICENSE_ID" | tar -xz --overwrite --strip-components=1 --directory . && \
   ${CRYOSPARC_MASTER_DIR}/bin/cryosparcm deps && \
-  sed -i 's/^export CRYOSPARC_LICENSE_ID=.*$/export CRYOSPARC_LICENSE_ID=TBD/g' ${CRYOSPARC_MASTER_DIR}/config.sh
-RUN  [ ! -z "$CRYOSPARC_LIVE" ] && cd ${CRYOSPARC_WORKER_DIR} && \
+  sed -i 's/^export CRYOSPARC_LICENSE_ID=.*$/export CRYOSPARC_LICENSE_ID=TBD/g' ${CRYOSPARC_MASTER_DIR}/config.sh; fi
+RUN  if [ ! -z $CRYOSPARC_LIVE ]; then cd ${CRYOSPARC_WORKER_DIR} && \
   curl -L "https://get.cryosparc.com/download/worker-${CRYOSPARC_LIVE}/$CRYOSPARC_LICENSE_ID" | tar -xz --overwrite --strip-components=1 --directory . && \
   ${CRYOSPARC_WORKER_DIR}/bin/cryosparcw deps && \
-  sed -i 's/^export CRYOSPARC_LICENSE_ID=.*$/export CRYOSPARC_LICENSE_ID=TBD/g' ${CRYOSPARC_WORKER_DIR}/config.sh
+  sed -i 's/^export CRYOSPARC_LICENSE_ID=.*$/export CRYOSPARC_LICENSE_ID=TBD/g' ${CRYOSPARC_WORKER_DIR}/config.sh; fi
 
 # install jupyterlab
 #RUN  pip3 install --upgrade pip wheel
@@ -67,6 +68,15 @@ RUN  [ ! -z "$CRYOSPARC_LIVE" ] && cd ${CRYOSPARC_WORKER_DIR} && \
 #  && jupyter labextension enable jupyterlab-server-proxy \
 #  && jupyter labextension install @lsst-sqre/jupyterlab-savequit \
 #  && jupyter labextension enable @lsst-sqre/jupyterlab-savequit
+
+###
+# install motioncor
+###
+RUN cd /usr/local/bin \
+  && curl -L 'https://drive.google.com/uc?export=download&id=17dOr87lhhxGhg6xQYr4f8eo0OEo-GdUI' > MotionCor2_1.2.3.zip \
+  && unzip MotionCor2_1.2.3.zip \
+  && rm -f MotionCor2_1.2.3.zip \
+  && ln -sf MotionCor2_1.2.3-Cuda100 MotionCor2
 
 COPY entrypoint.bash /entrypoint.bash
 COPY cryosparc.sh /cryosparc.sh
