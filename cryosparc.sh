@@ -29,6 +29,7 @@ cd ${CRYOSPARC_MASTER_DIR}
 # modify configuration
 ls -lah ${CRYOSPARC_MASTER_DIR}/config.sh
 sed -i --follow-symlinks 's/^export CRYOSPARC_MASTER_HOSTNAME=.*$/export CRYOSPARC_MASTER_HOSTNAME=localhost/g' ${CRYOSPARC_MASTER_DIR}/config.sh
+#sed -i --follow-symlinks 's/^export CRYOSPARC_MASTER_HOSTNAME=.*$/export CRYOSPARC_MASTER_HOSTNAME=${HOSTNAME}/g' ${CRYOSPARC_MASTER_DIR}/config.sh
 sed -i --follow-symlinks 's/^export CRYOSPARC_LICENSE_ID=.*$/export CRYOSPARC_LICENSE_ID=${CRYOSPARC_LICENSE_ID}/g' ${CRYOSPARC_MASTER_DIR}/config.sh
 sed -i --follow-symlinks 's/^export CRYOSPARC_DB_PATH=.*$/export CRYOSPARC_DB_PATH=${CRYOSPARC_DATADIR}\/cryosparc2_database/g' ${CRYOSPARC_MASTER_DIR}/config.sh
 
@@ -40,29 +41,33 @@ cryosparcm env
 cryosparcm restart
 
 # add user
-cryosparcm createuser --email $(whoami)@slac.stanford.edu --password testtest --name "JupyterHub User"
+cryosparcm createuser --email $(whoami)@slac.stanford.edu --password "${CRYOSPARC_LICENSE_ID}" --name "User"
+# always set the passwrod to license
+cryosparcm resetpassword --email $(whoami)@slac.stanford.edu --password "${CRYOSPARC_LICENSE_ID}"
 
 # need to restart to get login prompt
 cryosparcm restart
 
-env
-
 ###
 # worker initiation
 ###
-
 cd ${CRYOSPARC_WORKER_DIR}
-sed -i 's/^export CRYOSPARC_MASTER_HOSTNAME=.*$/export CRYOSPARC_MASTER_HOSTNAME=localhost/g' ${CRYOSPARC_WORKER_DIR}/config.sh
+sed -i --follow-symlinks 's/^export CRYOSPARC_LICENSE_ID=.*$/export CRYOSPARC_LICENSE_ID=${CRYOSPARC_LICENSE_ID}/g' ${CRYOSPARC_WORKER_DIR}/config.sh
+sed -i --follow-symlinks 's/^export CRYOSPARC_MASTER_HOSTNAME=.*$/export CRYOSPARC_MASTER_HOSTNAME=${HOSTNAME}/g' ${CRYOSPARC_WORKER_DIR}/config.sh
 
-# start
-cryosparcw connect --worker localhost --master localhost --ssdpath /scratch
+# start worker
+mkdir -p /scratch/$(whoami)
+
+# remove all existing worker threads
+/app/cryosparc2_master/bin/cryosparcm cli 'get_scheduler_targets()'  | python -c "import sys, ast, json; print( json.dumps(ast.literal_eval(sys.stdin.readline())) )" | jq '.[].name' | sed 's:"::g' | xargs -n1 -I \{\} /app/cryosparc2_master/bin/cryosparcm cli 'remove_scheduler_target_node("'{}'")'
+
+#echo cryosparcw connect --update --worker localhost --master cryosparc-${USER} --ssdpath /scratch/$(whoami)/
+#cryosparcw connect --update --worker localhost --master cryosparc-${USER} --ssdpath /scratch/$(whoami)/
+#if [ $? == 1 ]; then
+/app/cryosparc2_worker/bin/cryosparcw connect --worker localhost --master cryosparc-api-$(whoami) --ssdpath /scratch/$(whoami)/
+#fi
 
 ###
 # monitor forever
 ###
-
-while [ 1 ]; do
-  cryosparcm status
-  # cryosparcw status
-  sleep 60
-done
+tail -f ${CRYOSPARC_MASTER_DIR}/run/command_core.log

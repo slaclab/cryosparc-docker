@@ -160,16 +160,24 @@ mkdir -p ${CRYOSPARC_DATADIR}/cryosparc2_database
 
 if [[ ! -e "${CRYOSPARC_DATADIR}/config.sh" ]]; then
     # copy config
-    echo mv ${CRYOSPARC_MASTER_DIR}/config.sh ${CRYOSPARC_DATADIR}/config.sh
-    mv ${CRYOSPARC_MASTER_DIR}/config.sh ${CRYOSPARC_DATADIR}/config.sh
+    echo cp ${CRYOSPARC_MASTER_DIR}/config.sh ${CRYOSPARC_DATADIR}/config.sh
+    cp ${CRYOSPARC_MASTER_DIR}/config.sh ${CRYOSPARC_DATADIR}/config.sh
 fi
-    
+
+if [[ ! -e "${CRYOSPARC_DATADIR}/worker-config.sh" ]]; then
+    # copy
+    echo cp ${CRYOSPARC_WORKER_DIR}/config.sh ${CRYOSPARC_DATADIR}/worker-config.sh
+    cp ${CRYOSPARC_WORKER_DIR}/config.sh ${CRYOSPARC_DATADIR}/worker-config.sh
+fi
+ 
 echo chown -R ${U_NAME} ${CRYOSPARC_DATADIR}
 chown -R ${U_NAME} ${CRYOSPARC_DATADIR}
 
-
 echo ln -sf ${CRYOSPARC_DATADIR}/config.sh ${CRYOSPARC_MASTER_DIR}/config.sh
 ln -sf ${CRYOSPARC_DATADIR}/config.sh ${CRYOSPARC_MASTER_DIR}/config.sh
+
+echo ln -sf ${CRYOSPARC_DATADIR}/worker-config.sh ${CRYOSPARC_WORKER_DIR}/worker-config.sh
+ln -sf ${CRYOSPARC_DATADIR}/worker-config.sh ${CRYOSPARC_WORKER_DIR}/worker-config.sh
 
 echo ln -sf ${CRYOSPARC_DATADIR}/run ${CRYOSPARC_MASTER_DIR}/run
 ln -sf ${CRYOSPARC_DATADIR}/run ${CRYOSPARC_MASTER_DIR}/run
