@@ -67,15 +67,6 @@ RUN  if [ ! -z $CRYOSPARC_LIVE ]; then cd ${CRYOSPARC_WORKER_DIR} && \
   ${CRYOSPARC_WORKER_DIR}/bin/cryosparcw deps && \
   sed -i 's/^export CRYOSPARC_LICENSE_ID=.*$/export CRYOSPARC_LICENSE_ID=TBD/g' ${CRYOSPARC_WORKER_DIR}/config.sh; fi
 
-# install jupyterlab
-#RUN  pip3 install --upgrade pip wheel
-#RUN  pip3 install jupyterlab jupyterlab_server jupyterhub jupyter-server-proxy
-#RUN  jupyter serverextension enable jupyter_server_proxy --py --sys-prefix \
-#  && jupyter labextension install jupyterlab-server-proxy --no-build \
-#  && jupyter labextension enable jupyterlab-server-proxy \
-#  && jupyter labextension install @lsst-sqre/jupyterlab-savequit \
-#  && jupyter labextension enable @lsst-sqre/jupyterlab-savequit
-
 ###
 # install motioncor
 ###
