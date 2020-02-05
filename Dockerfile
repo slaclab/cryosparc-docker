@@ -4,7 +4,13 @@ ARG CRYOSPARC_LICENSE_ID
 
 ENV DEBIAN_FRONTEND noninteractive
 
-# need newer node
+# munge and slurm stuff
+ARG SLURMUSER=16924
+ARG SLURMGROUP=1034
+RUN groupadd -f -g $MUNGEGROUP munge \
+    && useradd  -m -c "MUNGE Uid 'N' Gid Emporium" -d /var/lib/munge -u $MUNGEUSER -g munge  -s /sbin/nologin munge \
+    && groupadd -f -g $SLURMGROUP slurm \
+    && useradd  -m -c "SLURM workload manager" -d /var/lib/slurm -u $SLURMUSER -g slurm  -s /bin/bash slurm
 
 RUN apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv 2930ADAE8CAF5059EE73BB4B58712A2291FA4AD5 \
   && echo "deb [ arch=amd64,arm64 ] https://repo.mongodb.org/apt/ubuntu xenial/mongodb-org/3.6 multiverse" | tee /etc/apt/sources.list.d/mongodb-org-3.6.list \
@@ -24,6 +30,7 @@ RUN apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv 2930ADAE8CAF505
     net-tools \
     openssh-server \
     jq \
+    munge \
   && curl -sL https://deb.nodesource.com/setup_6.x | bash - \
   && apt-get install -y nodejs \
   && rm -rf /var/lib/apt/lists/*
