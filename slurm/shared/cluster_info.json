@@ -1,0 +1,11 @@
+{
+    "name" : "slurm - shared partition",
+    "worker_bin_path" : "cryosparcw",
+    "cache_path" : "/scratch/${USER}/cryosparc/",
+    "send_cmd_tpl" : "{{ command }}",
+    "qsub_cmd_tpl" : "/opt/slurm/current/bin/sbatch --chdir /scratch  {{ script_path_abs }}",
+    "qstat_cmd_tpl" : "/opt/slurm/current/bin/squeue -j {{ cluster_job_id }}",
+    "qdel_cmd_tpl" : "/opt/slurm/current/bin/scancel {{ cluster_job_id }}",
+    "qinfo_cmd_tpl" : "/opt/slurm/current/bin/sinfo",
+    "transfer_cmd_tpl" : "scp {{ src_path }} loginnode:{{ dest_path }}"
+}
