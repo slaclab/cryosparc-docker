@@ -5,11 +5,11 @@ ARG CRYOSPARC_LICENSE_ID
 ENV DEBIAN_FRONTEND noninteractive
 
 # munge and slurm stuff
+ARG MUNGEUSER=16952
+ARG MUNGEGROUP=1034
 ARG SLURMUSER=16924
 ARG SLURMGROUP=1034
-RUN groupadd -f -g $MUNGEGROUP munge \
-    && useradd  -m -c "MUNGE Uid 'N' Gid Emporium" -d /var/lib/munge -u $MUNGEUSER -g munge  -s /sbin/nologin munge \
-    && groupadd -f -g $SLURMGROUP slurm \
+RUN groupadd -f -g $SLURMGROUP slurm \
     && useradd  -m -c "SLURM workload manager" -d /var/lib/slurm -u $SLURMUSER -g slurm  -s /bin/bash slurm
 
 RUN apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv 2930ADAE8CAF5059EE73BB4B58712A2291FA4AD5 \
@@ -35,6 +35,11 @@ RUN apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv 2930ADAE8CAF505
   && apt-get install -y nodejs \
   && rm -rf /var/lib/apt/lists/*
 RUN ln -s /usr/lib/x86_64-linux-gnu/libtiff.so.5 /usr/lib/x86_64-linux-gnu/libtiff.so.3
+RUN groupmod -o -g $MUNGEGROUP munge \
+    && usermod -c "MUNGE Uid 'N' Gid Emporium" -d /var/lib/munge -u $MUNGEUSER -g munge  -s /sbin/nologin munge \
+    && chown -R munge:$MUNGEGROUP /etc/munge 
+
+#ENTRYPOINT bash -c 'while [ 1 ]; do sleep 60; done'
 
 ENV CRYOSPARC_ROOT_DIR /app
 RUN mkdir -p ${CRYOSPARC_ROOT_DIR}
@@ -78,6 +83,8 @@ RUN cd /usr/local/bin \
 
 COPY entrypoint.bash /entrypoint.bash
 COPY cryosparc.sh /cryosparc.sh
+
+ADD slurm /app/slurm
 
 EXPOSE 39000
 EXPOSE 39001
