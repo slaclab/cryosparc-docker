@@ -192,7 +192,7 @@ cat ${CRYOSPARC_MASTER_DIR}/config.sh
 ls -lah ${CRYOSPARC_MASTER_DIR}
 
 # change code
-sed -i 's:    disk_has_space=.*:    disk_has_space="true":g' /app/cryosparc2_master/bin/cryosparcm
+#sed -i 's:    disk_has_space=.*:    disk_has_space="true":g' /app/cryosparc2_master/bin/cryosparcm
 
 # gui changes
 #sed -i 's|"url": "/fonts/woff|"url": "/user/ytl/proxy/absolute/39000/fonts/woff/|g' /app/cryosparc2_master/cryosparc2_webapp/bundle/programs/web.browser/program.json

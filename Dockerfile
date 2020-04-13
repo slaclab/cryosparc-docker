@@ -55,6 +55,9 @@ RUN cd ${CRYOSPARC_MASTER_DIR} && \
   bash ./install.sh --license ${CRYOSPARC_LICENSE_ID} --yes --allowroot && \
   sed -i 's/^export CRYOSPARC_LICENSE_ID=.*$/export CRYOSPARC_LICENSE_ID=TBD/g' ${CRYOSPARC_MASTER_DIR}/config.sh
 
+# patches
+RUN sed -i 's:    disk_has_space=.*:    disk_has_space="true":g'  ${CRYOSPARC_MASTER_DIR}/bin/cryosparcm
+
 # install worker
 ENV CRYOSPARC_WORKER_DIR ${CRYOSPARC_ROOT_DIR}/cryosparc2_worker
 RUN cd ${CRYOSPARC_WORKER_DIR} && \
