@@ -86,6 +86,7 @@ RUN cd /usr/local/bin \
 
 COPY entrypoint.bash /entrypoint.bash
 COPY cryosparc.sh /cryosparc.sh
+COPY cryosparc-server.sh ${CRYOSPARC_MASTER_DIR}/bin/cryosparc-server.sh
 
 ADD slurm /app/slurm
 
