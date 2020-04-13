@@ -16,6 +16,7 @@
 LD_PRELOAD=""
 nvidia-smi
 echo "CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES}
+echo "CRYOSPARC_VERSION="${CRYOSPARC_VERSION}
 
 export TMPDIR="/scratch/${USER}/cryosparc/"
 #{{ project_uid }}/{{ job_uid }}/"
@@ -25,7 +26,7 @@ mkdir -p ${TMPDIR}
 # load cryosarc
 source /etc/profile.d/modules.sh
 export MODULEPATH=/afs/slac/package/singularity/modulefiles
-module load cryosparc
+module load cryosparc/${CRYOSPARC_VERSION:1}
 # {{ run_cmd }}
 {{ worker_bin_path }} run {{ run_args }} --ssd "${TMPDIR}" > {{ job_log_path_abs }} 2>&1
 
