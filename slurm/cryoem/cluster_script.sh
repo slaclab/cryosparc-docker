@@ -26,7 +26,9 @@ mkdir -p ${TMPDIR}
 # load cryosarc
 source /etc/profile.d/modules.sh
 export MODULEPATH=/afs/slac/package/singularity/modulefiles
-module load cryosparc/${CRYOSPARC_VERSION:1}
+module load cryosparc/${CRYOSPARC_VERSION}
+
 # {{ run_cmd }}
-{{ worker_bin_path }} run {{ run_args }} --ssd "${TMPDIR}" > {{ job_log_path_abs }} 2>&1
+export RUN_ARGS="{{ run_args }}"
+{{ worker_bin_path }} run ${RUN_ARGS/--master_hostname cryosparc-/--master_hostname cryosparc-api-} --ssd "${TMPDIR}" > {{ job_log_path_abs }} 2>&1
 
