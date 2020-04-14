@@ -1,4 +1,4 @@
-#!/bin/bash  -xe
+#!/bin/bash -x
 
 export PATH=${CRYOSPARC_MASTER_DIR}/bin:${CRYOSPARC_WORKER_DIR}/bin:${CRYOSPARC_MASTER_DIR}/deps/anaconda/bin/:$PATH
 export HOME=${USER_HOMEDIR}
@@ -23,6 +23,11 @@ printf "%s\n" "1,\$s/^export CRYOSPARC_BASE_PORT=.*$/export CRYOSPARC_BASE_PORT=
 echo '====='
 cat ${CRYOSPARC_MASTER_DIR}/config.sh
 echo '====='
+
+# modify mongo path
+#sed -i 's|MONGO_URL="mongodb://%(ENV_CRYOSPARC_MASTER_HOSTNAME)s:%(ENV_CRYOSPARC_MONGO_PORT)s|MONGO_URL=mongodb://cryosparc-fpoitevi:%(ENV_CRYOSPARC_MONGO_PORT)s|g' ${CRYOSPARC_MASTER_DIR}/supervisord.conf
+#sed -i 's|MONGO_OPLOG_URL="mongodb://%(ENV_CRYOSPARC_MASTER_HOSTNAME)s:%(ENV_CRYOSPARC_MONGO_PORT)s|MONGO_OPLOG_URL="mongodb://cryosparc-fpoitevi:%(ENV_CRYOSPARC_MONGO_PORT)s|g' ${CRYOSPARC_MASTER_DIR}/supervisord.conf
+#sed -i 's|ROOT_URL="http://%(ENV_CRYOSPARC_MASTER_HOSTNAME)s:|ROOT_URL="http://cryosparc-fpoitevi:|g' ${CRYOSPARC_MASTER_DIR}/supervisord.conf
 
 # envs
 echo "Starting cryoSPARC in ${CRYOSPARC_MASTER_DIR} with..."
@@ -66,7 +71,7 @@ if [ "${CRYOSPARC_LOCAL_WORKER}" == "1" ]; then
   #printf "%s\n" "1,\$s/^export CRYOSPARC_MASTER_HOSTNAME=.*$/export CRYOSPARC_MASTER_HOSTNAME=${CRYOSPARC_MASTER_HOSTNAME}/g" wq | ed -s ${CRYOSPARC_WORKER_DIR}/config.sh
 
   # intiate
-  ${CRYOSPARC_WORKER_DIR}/bin/cryosparcw connect --worker cryosparc-api-${THIS_USER} --master cryosparc-api-${THIS_USER} --ssdpath $TMPDIR/
+  ${CRYOSPARC_WORKER_DIR}/bin/cryosparcw connect --worker cryosparc-${THIS_USER} --master cryosparc-${THIS_USER} --ssdpath $TMPDIR/
 
   echo "Success starting cryosparc worker!"
 

@@ -1,6 +1,5 @@
+# syntax=docker/dockerfile:experimental
 FROM nvidia/cuda:10.0-devel-ubuntu16.04
-
-ARG CRYOSPARC_LICENSE_ID
 
 ENV DEBIAN_FRONTEND noninteractive
 
@@ -24,6 +23,7 @@ RUN apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv 2930ADAE8CAF505
     python3-pip \
     libtiff5 \
     netbase \
+    ed \
     curl \
     iputils-ping \
     sudo \
@@ -33,56 +33,64 @@ RUN apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv 2930ADAE8CAF505
     munge \
   && curl -sL https://deb.nodesource.com/setup_6.x | bash - \
   && apt-get install -y nodejs \
-  && rm -rf /var/lib/apt/lists/*
-RUN ln -s /usr/lib/x86_64-linux-gnu/libtiff.so.5 /usr/lib/x86_64-linux-gnu/libtiff.so.3
+  && rm -rf /var/lib/apt/lists/* \
+  && ln -s /usr/lib/x86_64-linux-gnu/libtiff.so.5 /usr/lib/x86_64-linux-gnu/libtiff.so.3
+
 RUN groupmod -o -g $MUNGEGROUP munge \
     && usermod -c "MUNGE Uid 'N' Gid Emporium" -d /var/lib/munge -u $MUNGEUSER -g munge  -s /sbin/nologin munge \
     && chown -R munge:$MUNGEGROUP /etc/munge 
-
-#ENTRYPOINT bash -c 'while [ 1 ]; do sleep 60; done'
 
 ENV CRYOSPARC_ROOT_DIR /app
 RUN mkdir -p ${CRYOSPARC_ROOT_DIR}
 WORKDIR ${CRYOSPARC_ROOT_DIR}
 
-# download latest
-RUN curl -L https://get.cryosparc.com/download/master-latest/${CRYOSPARC_LICENSE_ID} | tar -xz
-RUN curl -L https://get.cryosparc.com/download/worker-latest/${CRYOSPARC_LICENSE_ID} | tar -xz
+ARG CRYOSPARC_VERSION
+ENV CRYOSPARC_VERSION=${CRYOSPARC_VERSION}
 
 # install master
 ENV CRYOSPARC_MASTER_DIR ${CRYOSPARC_ROOT_DIR}/cryosparc2_master
-RUN cd ${CRYOSPARC_MASTER_DIR} && \
-  bash ./install.sh --license ${CRYOSPARC_LICENSE_ID} --yes --allowroot && \
-  sed -i 's/^export CRYOSPARC_LICENSE_ID=.*$/export CRYOSPARC_LICENSE_ID=TBD/g' ${CRYOSPARC_MASTER_DIR}/config.sh
+RUN --mount=type=secret,id=cryosparc_license_id \
+  curl -L https://get.cryosparc.com/download/master-v${CRYOSPARC_VERSION}/$(cat /run/secrets/cryosparc_license_id) | tar -xz \
+	&& cd ${CRYOSPARC_MASTER_DIR} \
+  && bash ./install.sh --license "$(cat /run/secrets/cryosparc_license_id)" --yes --allowroot \
+  && sed -i 's/^export CRYOSPARC_LICENSE_ID=.*$/export CRYOSPARC_LICENSE_ID=TBD/g' ${CRYOSPARC_MASTER_DIR}/config.sh 
 
 # patches
 RUN sed -i 's:    disk_has_space=.*:    disk_has_space="true":g'  ${CRYOSPARC_MASTER_DIR}/bin/cryosparcm
 
 # install worker
 ENV CRYOSPARC_WORKER_DIR ${CRYOSPARC_ROOT_DIR}/cryosparc2_worker
-RUN cd ${CRYOSPARC_WORKER_DIR} && \
-  bash ./install.sh --license ${CRYOSPARC_LICENSE_ID} --yes --cudapath /usr/local/cuda && \
-  sed -i 's/^export CRYOSPARC_LICENSE_ID=.*$/export CRYOSPARC_LICENSE_ID=TBD/g' ${CRYOSPARC_WORKER_DIR}/config.sh
+RUN --mount=type=secret,id=cryosparc_license_id \
+  curl -L https://get.cryosparc.com/download/worker-v${CRYOSPARC_VERSION}/$(cat /run/secrets/cryosparc_license_id) | tar -xz \
+  && cd ${CRYOSPARC_WORKER_DIR} \
+  && bash ./install.sh --license "$(cat /run/secrets/cryosparc_license_id)" --yes --cudapath /usr/local/cuda \
+  && sed -i 's/^export CRYOSPARC_LICENSE_ID=.*$/export CRYOSPARC_LICENSE_ID=TBD/g' ${CRYOSPARC_WORKER_DIR}/config.sh 
 
 # install cryosparc live
-ARG  CRYOSPARC_LIVE
-RUN  if [ ! -z $CRYOSPARC_LIVE ]; then cd ${CRYOSPARC_MASTER_DIR} && \
-  curl -L "https://get.cryosparc.com/download/master-${CRYOSPARC_LIVE}/$CRYOSPARC_LICENSE_ID" | tar -xz --overwrite --strip-components=1 --directory . && \
-  ${CRYOSPARC_MASTER_DIR}/bin/cryosparcm deps && \
-  sed -i 's/^export CRYOSPARC_LICENSE_ID=.*$/export CRYOSPARC_LICENSE_ID=TBD/g' ${CRYOSPARC_MASTER_DIR}/config.sh; fi
-RUN  if [ ! -z $CRYOSPARC_LIVE ]; then cd ${CRYOSPARC_WORKER_DIR} && \
-  curl -L "https://get.cryosparc.com/download/worker-${CRYOSPARC_LIVE}/$CRYOSPARC_LICENSE_ID" | tar -xz --overwrite --strip-components=1 --directory . && \
-  ${CRYOSPARC_WORKER_DIR}/bin/cryosparcw deps && \
-  sed -i 's/^export CRYOSPARC_LICENSE_ID=.*$/export CRYOSPARC_LICENSE_ID=TBD/g' ${CRYOSPARC_WORKER_DIR}/config.sh; fi
+ARG CRYOSPARC_LIVE
+RUN --mount=type=secret,id=cryosparc_license_id \
+  if [ ! -z $CRYOSPARC_LIVE ]; then cd ${CRYOSPARC_MASTER_DIR} \
+    curl -L "https://get.cryosparc.com/download/master-${CRYOSPARC_LIVE}/$(cat /run/secrets/cryosparc_license_id)" | tar -xz --overwrite --strip-components=1 --directory . \
+    && ${CRYOSPARC_MASTER_DIR}/bin/cryosparcm deps \
+    && sed -i 's/^export CRYOSPARC_LICENSE_ID=.*$/export CRYOSPARC_LICENSE_ID=TBD/g' ${CRYOSPARC_MASTER_DIR}/config.sh; \
+  fi
+RUN --mount=type=secret,id=cryosparc_license_id \
+  if [ ! -z $CRYOSPARC_LIVE ]; then cd ${CRYOSPARC_WORKER_DIR} \
+    curl -L "https://get.cryosparc.com/download/worker-${CRYOSPARC_LIVE}/$(cat /run/secrets/cryosparc_license_id)" | tar -xz --overwrite --strip-components=1 --directory . \
+    && ${CRYOSPARC_WORKER_DIR}/bin/cryosparcw deps \
+    && sed -i 's/^export CRYOSPARC_LICENSE_ID=.*$/export CRYOSPARC_LICENSE_ID=TBD/g' ${CRYOSPARC_WORKER_DIR}/config.sh; \
+  fi
 
-###
-# install motioncor
-###
+####
+## install motioncor
+####
+ARG MOTIONCOR2_VERSION=1.2.3
+ENV MOTIONCOR2_VERSION=${MOTIONCOR2_VERSION}
 RUN cd /usr/local/bin \
-  && curl -L 'https://drive.google.com/uc?export=download&id=17dOr87lhhxGhg6xQYr4f8eo0OEo-GdUI' > MotionCor2_1.2.3.zip \
-  && unzip MotionCor2_1.2.3.zip \
-  && rm -f MotionCor2_1.2.3.zip \
-  && ln -sf MotionCor2_1.2.3-Cuda100 MotionCor2
+  && curl -L 'https://drive.google.com/uc?export=download&id=17dOr87lhhxGhg6xQYr4f8eo0OEo-GdUI' > MotionCor2_${MOTIONCOR2_VERSION}.zip \
+  && unzip MotionCor2_${MOTIONCOR2_VERSION}.zip \
+  && rm -f MotionCor2_${MOTIONCOR2_VERSION}.zip \
+  && ln -sf MotionCor2_${MOTIONCOR2_VERSION}-Cuda100 MotionCor2
 
 COPY entrypoint.bash /entrypoint.bash
 COPY cryosparc.sh /cryosparc.sh
