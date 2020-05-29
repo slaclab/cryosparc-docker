@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/bash -x
 
 function setup_user() {
     id -u ${U_NAME} 2> /dev/null 1>&2
@@ -132,7 +132,7 @@ function purge_docker_vars() {
 }
 
 
-U_NAME="${JUPYTERHUB_USER}"
+U_NAME="${USERNAME}"
 HOMEDIRS=${HOMEDIRS:="/home"}
 export USER_HOMEDIR="${HOMEDIRS}/${U_NAME}"
 DEFAULT_SHELL="/bin/bash"
@@ -151,44 +151,31 @@ fi
 # ensure we have a cryosparc directory under home
 export CRYOSPARC_DATADIR=${USER_HOMEDIR}/cryosparc-v2
 echo "Creating cryosparc datadir ${CRYOSPARC_DATADIR}..."
-echo mkdir -p ${CRYOSPARC_DATADIR}
 mkdir -p ${CRYOSPARC_DATADIR} 
-echo mkdir -p ${CRYOSPARC_DATADIR}/run
 mkdir -p ${CRYOSPARC_DATADIR}/run
-echo mkdir -p ${CRYOSPARC_DATADIR}/cryosparc2_database
 mkdir -p ${CRYOSPARC_DATADIR}/cryosparc2_database
 
 if [[ ! -e "${CRYOSPARC_DATADIR}/config.sh" ]]; then
     # copy config
-    echo cp ${CRYOSPARC_MASTER_DIR}/config.sh ${CRYOSPARC_DATADIR}/config.sh
     cp ${CRYOSPARC_MASTER_DIR}/config.sh ${CRYOSPARC_DATADIR}/config.sh
 fi
 
 if [[ ! -e "${CRYOSPARC_DATADIR}/worker-config.sh" ]]; then
     # copy
-    echo cp ${CRYOSPARC_WORKER_DIR}/config.sh ${CRYOSPARC_DATADIR}/worker-config.sh
     cp ${CRYOSPARC_WORKER_DIR}/config.sh ${CRYOSPARC_DATADIR}/worker-config.sh
 fi
  
-echo chown -R ${U_NAME} ${CRYOSPARC_DATADIR}
 chown -R ${U_NAME} ${CRYOSPARC_DATADIR}
 
-echo ln -sf ${CRYOSPARC_DATADIR}/config.sh ${CRYOSPARC_MASTER_DIR}/config.sh
 ln -sf ${CRYOSPARC_DATADIR}/config.sh ${CRYOSPARC_MASTER_DIR}/config.sh
-
-echo ln -sf ${CRYOSPARC_DATADIR}/worker-config.sh ${CRYOSPARC_WORKER_DIR}/worker-config.sh
 ln -sf ${CRYOSPARC_DATADIR}/worker-config.sh ${CRYOSPARC_WORKER_DIR}/worker-config.sh
-
-echo ln -sf ${CRYOSPARC_DATADIR}/run ${CRYOSPARC_MASTER_DIR}/run
 ln -sf ${CRYOSPARC_DATADIR}/run ${CRYOSPARC_MASTER_DIR}/run
 
 # stupid thing wants to create temp files within the master dir
-echo chown ${U_NAME} ${CRYOSPARC_MASTER_DIR}/
 chown ${U_NAME} ${CRYOSPARC_MASTER_DIR}/
-echo chown ${U_NAME} ${CRYOSPARC_WORKER_DIR}/
 chown ${U_NAME} ${CRYOSPARC_WORKER_DIR}/
 
-cat ${CRYOSPARC_MASTER_DIR}/config.sh
+#cat ${CRYOSPARC_MASTER_DIR}/config.sh
 ls -lah ${CRYOSPARC_MASTER_DIR}
 
 # change code
@@ -196,8 +183,7 @@ ls -lah ${CRYOSPARC_MASTER_DIR}
 
 # gui changes
 #sed -i 's|"url": "/fonts/woff|"url": "/user/ytl/proxy/absolute/39000/fonts/woff/|g' /app/cryosparc2_master/cryosparc2_webapp/bundle/programs/web.browser/program.json
-chmod -R ugo+rwx /app/cryosparc2_master/cryosparc2_webapp/bundle/
+#chmod -R ugo+rwx /app/cryosparc2_master/cryosparc2_webapp/bundle/
 
 # down privs to user
-echo exec ${sudo} /cryosparc.sh
 exec ${sudo} /cryosparc.sh
