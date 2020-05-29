@@ -33,7 +33,6 @@ echo '====='
 #sed -i 's|ROOT_URL="http://%(ENV_CRYOSPARC_MASTER_HOSTNAME)s:|ROOT_URL="http://cryosparc-fpoitevi:|g' ${CRYOSPARC_MASTER_DIR}/supervisord.conf
 
 # envs
-echo "Starting cryoSPARC in ${CRYOSPARC_MASTER_DIR} with..."
 THIS_USER=$(whoami)
 THIS_USER_SUFFIX=${USER_SUFFIX:-'slac.stanford.edu'}
 ACCOUNT="${THIS_USER}@${THIS_USER_SUFFIX}"
@@ -49,40 +48,40 @@ cryosparcm resetpassword --email ${ACCOUNT} --password "${CRYOSPARC_LICENSE_ID}"
 # need to restart to get login prompt
 cryosparcm restart
 
-# remove all existing worker threads
-echo "Registering job lanes..."
-${CRYOSPARC_MASTER_DIR}/bin/cryosparcm cli 'get_scheduler_targets()'  | python -c "import sys, ast, json; print( json.dumps(ast.literal_eval(sys.stdin.readline())) )" | jq '.[].name' | sed 's:"::g' | xargs -n1 -I \{\} ${CRYOSPARC_MASTER_DIR}/bin/cryosparcm cli 'remove_scheduler_target_node("'{}'")'
-# add slurm lanes
-for i in `ls -1 /app/slurm/`; do
-  cd /app/slurm/$i
-  ${CRYOSPARC_MASTER_DIR}/bin/cryosparcm cluster connect
-done
-cd ${CRYOSPARC_MASTER_DIR}
-
 echo "Success starting cryosparc master!"
 
-if [ "${CRYOSPARC_LOCAL_WORKER}" == "1" ]; then
+# remove all existing worker threads
+${CRYOSPARC_MASTER_DIR}/bin/cryosparcm cli 'get_scheduler_targets()'  | python -c "import sys, ast, json; print( json.dumps(ast.literal_eval(sys.stdin.readline())) )" | jq '.[].name' | sed 's:"::g' | xargs -n1 -I \{\} ${CRYOSPARC_MASTER_DIR}/bin/cryosparcm cli 'remove_scheduler_target_node("'{}'")'
 
-  ###
-  # worker initiation
-  ###
+# add additional job lanes
+if [ "${CRYOSPACE_ADD_JOB_LANES}" == "1" ]; then
+  echo "Registering job lanes..."
+  for i in `ls -1 /app/slurm/`; do
+    cd /app/slurm/$i
+    ${CRYOSPARC_MASTER_DIR}/bin/cryosparcm cluster connect
+  done
+  cd ${CRYOSPARC_MASTER_DIR}
+fi
+
+# local worker
+if [ "${CRYOSPARC_LOCAL_WORKER}" == "1" ]; then
   echo "Starting cryosparc local worker for ${CRYOSPARC_MASTER_HOSTNAME}..."
   export TMPDIR=${TMPDIR:-"/scratch/${THIS_USER}/cryosparc/"}
   mkdir -p ${TMPDIR}
-
-  cd ${CRYOSPARC_WORKER_DIR}
+  #cd ${CRYOSPARC_WORKER_DIR}
   #printf "%s\n" "1,\$s/^export CRYOSPARC_LICENSE_ID=.*$/export CRYOSPARC_LICENSE_ID=${CRYOSPARC_LICENSE_ID}/g" wq | ed -s ${CRYOSPARC_WORKER_DIR}/config.sh
   #printf "%s\n" "1,\$s/^export CRYOSPARC_MASTER_HOSTNAME=.*$/export CRYOSPARC_MASTER_HOSTNAME=${CRYOSPARC_MASTER_HOSTNAME}/g" wq | ed -s ${CRYOSPARC_WORKER_DIR}/config.sh
-
-  # intiate
-  NOGPU=""
+  local NOGPU=""
   if [ ! -z $CRYOSPARC_WORKER_NOGPU ]; then
     NOGPU="--nogpu"
   fi
-  ${CRYOSPARC_WORKER_DIR}/bin/cryosparcw connect --worker ${CRYOSPARC_MASTER_HOSTNAME} --master ${CRYOSPARC_MASTER_HOSTNAME} --ssdpath $TMPDIR/ --ssdquota ${CRYOSPARC_CACHE_QUOTA:-2500000} --ssdreserve ${CRYOSPARC_CACHE_FREE:-5000} ${NOGPU}
+  local SSD_OPTS="--ssdpath $TMPDIR/ --ssdquota ${CRYOSPARC_CACHE_QUOTA:-2500000} --ssdreserve ${CRYOSPARC_CACHE_FREE:-5000}"
+  if [ ! -z $CRYOSPARC_WORKER_NOSSD ]; then
+    SSD_OPTS="--nossd"
+  fi
+  ${CRYOSPARC_WORKER_DIR}/bin/cryosparcw connect --worker ${CRYOSPARC_MASTER_HOSTNAME} --master ${CRYOSPARC_MASTER_HOSTNAME} ${SSD_OPTS} ${NOGPU}
 
-  echo "Success starting cryosparc worker!"
-
+  echo "Success starting cryosparc worker"
 fi
 
 ###
