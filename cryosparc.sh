@@ -42,8 +42,9 @@ rm -f "${SOCK_FILE}" || true
 cryosparcm restart
 
 # always set the passwrod to license
-cryosparcm createuser --email ${ACCOUNT} --password "${CRYOSPARC_LICENSE_ID}" --name "User"
-cryosparcm resetpassword --email ${ACCOUNT} --password "${CRYOSPARC_LICENSE_ID}"
+CRYOSPARC_PASSWORD=${CRYOSPARC_PASSWORD:-${CRYOSPARC_LICENSE_ID}}
+cryosparcm createuser    --email ${ACCOUNT} --password "${CRYOSPARC_PASSWORD}" --name "${THIS_USER}"
+cryosparcm resetpassword --email ${ACCOUNT} --password "${CRYOSPARC_PASSWORD}"
 
 # need to restart to get login prompt
 cryosparcm restart
@@ -71,11 +72,11 @@ if [ "${CRYOSPARC_LOCAL_WORKER}" == "1" ]; then
   #cd ${CRYOSPARC_WORKER_DIR}
   #printf "%s\n" "1,\$s/^export CRYOSPARC_LICENSE_ID=.*$/export CRYOSPARC_LICENSE_ID=${CRYOSPARC_LICENSE_ID}/g" wq | ed -s ${CRYOSPARC_WORKER_DIR}/config.sh
   #printf "%s\n" "1,\$s/^export CRYOSPARC_MASTER_HOSTNAME=.*$/export CRYOSPARC_MASTER_HOSTNAME=${CRYOSPARC_MASTER_HOSTNAME}/g" wq | ed -s ${CRYOSPARC_WORKER_DIR}/config.sh
-  local NOGPU=""
+  NOGPU=""
   if [ ! -z $CRYOSPARC_WORKER_NOGPU ]; then
     NOGPU="--nogpu"
   fi
-  local SSD_OPTS="--ssdpath $TMPDIR/ --ssdquota ${CRYOSPARC_CACHE_QUOTA:-2500000} --ssdreserve ${CRYOSPARC_CACHE_FREE:-5000}"
+  SSD_OPTS="--ssdpath $TMPDIR/ --ssdquota ${CRYOSPARC_CACHE_QUOTA:-2500000} --ssdreserve ${CRYOSPARC_CACHE_FREE:-5000}"
   if [ ! -z $CRYOSPARC_WORKER_NOSSD ]; then
     SSD_OPTS="--nossd"
   fi
