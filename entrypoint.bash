@@ -45,9 +45,9 @@ function make_user() {
         makedir=1
     fi
     echo adduser ${U_NAME} --disabled-password --home ${USER_HOMEDIR} -N --ingroup ${gid} --uid ${nuid} \
-       --shell ${DEFAULT_SHELL} --gecos "jupyterhub account"
+       --shell ${DEFAULT_SHELL} --gecos "User"
     adduser ${U_NAME} --disabled-password --home ${USER_HOMEDIR} -N --ingroup ${gid} --uid ${nuid} \
-       --shell ${DEFAULT_SHELL} --gecos "jupyterhub account"
+       --shell ${DEFAULT_SHELL} --gecos "User"
     for g in "${supgrp[@]}"; do
         echo adduser ${U_NAME} $g
         adduser ${U_NAME} $g
