@@ -30,5 +30,5 @@ module load cryosparc/${CRYOSPARC_VERSION}
 
 # {{ run_cmd }}
 export RUN_ARGS="{{ run_args }}"
-{{ worker_bin_path }} run ${RUN_ARGS/--master_hostname cryosparc-/--master_hostname cryosparc-api-} --ssd "${TMPDIR}" > {{ job_log_path_abs }} 2>&1
+{{ worker_bin_path }} run ${RUN_ARGS/--master_hostname ${CRYOSPARC_MASTER_HOSTNAME}/--master_hostname ${CRYOSPARC_API_HOSTNAME}} --ssd "${TMPDIR}"  --ssdquota ${CRYOSPARC_CACHE_QUOTA:-250000} --ssdreserve ${CRYOSPARC_CACHE_FREE:-5000}  > {{ job_log_path_abs }} 2>&1
 
