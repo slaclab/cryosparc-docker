@@ -106,6 +106,6 @@ EXPOSE 39004
 EXPOSE 39006
 
 # stupid patch
-RUN curl -L 'https://structura-assets.s3.amazonaws.com/select2d_v2.14_index_error_bugfix/run.py' > ${CRYOSPARC_MASTER_DIR}/cryosparc2_compute/jobs/select2D/run.py
+#RUN if [ "${CRYOSPARC_VERSION}" = "2.14.2" ]; then curl -L 'https://structura-assets.s3.amazonaws.com/select2d_v2.14_index_error_bugfix/run.py' > ${CRYOSPARC_MASTER_DIR}/cryosparc2_compute/jobs/select2D/run.py; fi
 
 ENTRYPOINT /entrypoint.bash
