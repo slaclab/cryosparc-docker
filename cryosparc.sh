@@ -20,6 +20,9 @@ printf "%s\n" "1,\$s/^export CRYOSPARC_MASTER_HOSTNAME=.*$/export CRYOSPARC_MAST
 printf "%s\n" "1,\$s/^export CRYOSPARC_LICENSE_ID=.*$/export CRYOSPARC_LICENSE_ID=${CRYOSPARC_LICENSE_ID}/g" wq | ed -s ${CRYOSPARC_MASTER_DIR}/config.sh
 printf "%s\n" "1,\$s|^export CRYOSPARC_DB_PATH=.*$|export CRYOSPARC_DB_PATH=${CRYOSPARC_DATADIR}/cryosparc2_database|g" wq | ed -s ${CRYOSPARC_MASTER_DIR}/config.sh
 printf "%s\n" "1,\$s/^export CRYOSPARC_BASE_PORT=.*$/export CRYOSPARC_BASE_PORT=${CRYOSPARC_BASE_PORT}/g" wq | ed -s ${CRYOSPARC_MASTER_DIR}/config.sh
+if ! grep -q 'CRYOSPARC_FORCE_HOSTNAME=true' ${CRYOSPARC_MASTER_DIR}/config.sh; then
+  echo 'export CRYOSPARC_FORCE_HOSTNAME=true' >> ${CRYOSPARC_MASTER_DIR}/config.sh
+fi
 echo '====='
 cat ${CRYOSPARC_MASTER_DIR}/config.sh
 echo '====='
@@ -32,15 +35,16 @@ echo '====='
 # envs
 echo "Starting cryoSPARC in ${CRYOSPARC_MASTER_DIR} with..."
 THIS_USER=$(whoami)
-THIS_USER_SUFFIX=${USER_SUFFIX:-'@slac.stanford.edu'}
+THIS_USER_SUFFIX=${USER_SUFFIX:-'slac.stanford.edu'}
+ACCOUNT="${THIS_USER}@${THIS_USER_SUFFIX}"
 echo "Starting cryoSPARC in ${CRYOSPARC_MASTER_DIR} as ${THIS_USER}${THIS_USER_SUFFIx} with..."
 SOCK_FILE=$(cryosparcm env | grep CRYOSPARC_SUPERVISOR_SOCK_FILE | sed 's/^.*CRYOSPARC_SUPERVISOR_SOCK_FILE=//' | sed 's/"//g')
 rm -f "${SOCK_FILE}" || true
 cryosparcm restart
 
 # always set the passwrod to license
-cryosparcm createuser --email $(whoami)@slac.stanford.edu --password "${CRYOSPARC_LICENSE_ID}" --name "User"
-cryosparcm resetpassword --email $(whoami)@slac.stanford.edu --password "${CRYOSPARC_LICENSE_ID}"
+cryosparcm createuser --email ${ACCOUNT} --password "${CRYOSPARC_LICENSE_ID}" --name "User"
+cryosparcm resetpassword --email ${ACCOUNT} --password "${CRYOSPARC_LICENSE_ID}"
 
 # need to restart to get login prompt
 cryosparcm restart
@@ -62,7 +66,7 @@ if [ "${CRYOSPARC_LOCAL_WORKER}" == "1" ]; then
   ###
   # worker initiation
   ###
-  echo "Starting cryosparc worker cryosparc-api-${THIS_USER} for ${CRYOSPARC_MASTER_HOSTNAME}..."
+  echo "Starting cryosparc local worker for ${CRYOSPARC_MASTER_HOSTNAME}..."
   export TMPDIR=${TMPDIR:-"/scratch/${THIS_USER}/cryosparc/"}
   mkdir -p ${TMPDIR}
 
@@ -71,7 +75,11 @@ if [ "${CRYOSPARC_LOCAL_WORKER}" == "1" ]; then
   #printf "%s\n" "1,\$s/^export CRYOSPARC_MASTER_HOSTNAME=.*$/export CRYOSPARC_MASTER_HOSTNAME=${CRYOSPARC_MASTER_HOSTNAME}/g" wq | ed -s ${CRYOSPARC_WORKER_DIR}/config.sh
 
   # intiate
-  ${CRYOSPARC_WORKER_DIR}/bin/cryosparcw connect --worker cryosparc-${THIS_USER} --master cryosparc-${THIS_USER} --ssdpath $TMPDIR/
+  NOGPU=""
+  if [ ! -z $CRYOSPARC_WORKER_NOGPU ]; then
+    NOGPU="--nogpu"
+  fi
+  ${CRYOSPARC_WORKER_DIR}/bin/cryosparcw connect --worker ${CRYOSPARC_MASTER_HOSTNAME} --master ${CRYOSPARC_MASTER_HOSTNAME} --ssdpath $TMPDIR/ --ssdquota ${CRYOSPARC_CACHE_QUOTA:-2500000} --ssdreserve ${CRYOSPARC_CACHE_FREE:-5000} ${NOGPU}
 
   echo "Success starting cryosparc worker!"
 
@@ -81,4 +89,6 @@ fi
 # monitor forever
 ###
 echo "done... tailing logs..."
-tail -f ${CRYOSPARC_MASTER_DIR}/run/command_core.log
+while [ 1 ]; do
+  tail -f ${CRYOSPARC_MASTER_DIR}/run/command_core.log
+done
