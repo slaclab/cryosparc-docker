@@ -11,6 +11,16 @@ if [ "${CRYOSPARC_LICENSE_ID}" == "" ]; then
   echo "CRYOSPARC_LICENSE_ID required to continue..."
   exit 127
 fi
+# deal with multiple licenses
+if [ -z "${CRYOSPARC_LICENSE_ID##*,*}" ]; then
+  IFS=',' read -r -a licenses <<< "$CRYOSPARC_LICENSE_ID"
+  for index in "${!licenses[@]}"
+  do
+    echo "$index ${licenses[index]}"
+  done
+  CRYOSPARC_LICENSE_ID=${licenses[${HOSTNAME##*-}]}
+fi
+
 CRYOSPARC_BASE_PORT=${CRYOSPARC_BASE_PORT:-"39000"}
 
 echo "Starting cryosparc master..."
@@ -41,10 +51,21 @@ SOCK_FILE=$(cryosparcm env | grep CRYOSPARC_SUPERVISOR_SOCK_FILE | sed 's/^.*CRY
 rm -f "${SOCK_FILE}" || true
 cryosparcm restart
 
+# creat cryosparc local accounts
+create_account() {
+  local account=$1;
+  local password=$2;
+  local name=$3;
+  cryosparcm createuser    --email ${account} --password ${password} --name ${name};
+  cryosparcm resetpassword --email ${account} --password ${password};
+}
+export -f create_account
 # always set the passwrod to license
-CRYOSPARC_PASSWORD=${CRYOSPARC_PASSWORD:-${CRYOSPARC_LICENSE_ID}}
-cryosparcm createuser    --email ${ACCOUNT} --password "${CRYOSPARC_PASSWORD}" --name "${THIS_USER}"
-cryosparcm resetpassword --email ${ACCOUNT} --password "${CRYOSPARC_PASSWORD}"
+create_account ${ACCOUNT} "${CRYOSPARC_PASSWORD:-${CRYOSPARC_LICENSE_ID}}" "${THIS_USER}"
+# add additional
+if [ -e "/init.d/accounts" ]; then
+  cat /init.d/accounts | xargs -n3 bash -c 'create_account "$0" "$1" "$2"'
+fi
 
 # need to restart to get login prompt
 cryosparcm restart
@@ -69,9 +90,6 @@ if [ "${CRYOSPARC_LOCAL_WORKER}" == "1" ]; then
   echo "Starting cryosparc local worker for ${CRYOSPARC_MASTER_HOSTNAME}..."
   export TMPDIR=${TMPDIR:-"/scratch/${THIS_USER}/cryosparc/"}
   mkdir -p ${TMPDIR}
-  #cd ${CRYOSPARC_WORKER_DIR}
-  #printf "%s\n" "1,\$s/^export CRYOSPARC_LICENSE_ID=.*$/export CRYOSPARC_LICENSE_ID=${CRYOSPARC_LICENSE_ID}/g" wq | ed -s ${CRYOSPARC_WORKER_DIR}/config.sh
-  #printf "%s\n" "1,\$s/^export CRYOSPARC_MASTER_HOSTNAME=.*$/export CRYOSPARC_MASTER_HOSTNAME=${CRYOSPARC_MASTER_HOSTNAME}/g" wq | ed -s ${CRYOSPARC_WORKER_DIR}/config.sh
   NOGPU=""
   if [ ! -z $CRYOSPARC_WORKER_NOGPU ]; then
     NOGPU="--nogpu"
