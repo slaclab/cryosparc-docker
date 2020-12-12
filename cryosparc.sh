@@ -1,7 +1,7 @@
 #!/bin/bash -x
 
 export PATH=${CRYOSPARC_MASTER_DIR}/bin:${CRYOSPARC_WORKER_DIR}/bin:${CRYOSPARC_MASTER_DIR}/deps/anaconda/bin/:$PATH
-export HOME=${USER_HOMEDIR}
+export HOME=${HOME:-$USER_HOMEDIR}
 
 ###
 # master initiation
@@ -51,6 +51,14 @@ SOCK_FILE=$(cryosparcm env | grep CRYOSPARC_SUPERVISOR_SOCK_FILE | sed 's/^.*CRY
 rm -f "${SOCK_FILE}" || true
 cryosparcm restart
 
+# ensure that the mongo replset is correct
+MONGO_PORT=$(( $CRYOSPARC_BASE_PORT + 1 ))
+mongo localhost:$MONGO_PORT  <<EOF
+cfg = rs.conf()
+cfg.members[0].host = "localhost:$MONGO_PORT"
+rs.reconfig(cfg, { force: true } )
+EOF
+
 # creat cryosparc local accounts
 create_account() {
   local account=$1;
@@ -88,17 +96,17 @@ fi
 # local worker
 if [ "${CRYOSPARC_LOCAL_WORKER}" == "1" ]; then
   echo "Starting cryosparc local worker for ${CRYOSPARC_MASTER_HOSTNAME}..."
-  export TMPDIR=${TMPDIR:-"/scratch/${THIS_USER}/cryosparc/"}
-  mkdir -p ${TMPDIR}
+  export CRYOSPARC_CACHE_DIR=${CRYOSPARC_CACHE_DIR:-"/lscratch/${THIS_USER}/cryosparc/"}
+  mkdir -p ${CRYOSPARC_CACHE_DIR}
   NOGPU=""
   if [ ! -z $CRYOSPARC_WORKER_NOGPU ]; then
     NOGPU="--nogpu"
   fi
-  SSD_OPTS="--ssdpath $TMPDIR/ --ssdquota ${CRYOSPARC_CACHE_QUOTA:-2500000} --ssdreserve ${CRYOSPARC_CACHE_FREE:-5000}"
+  SSD_OPTS="--ssdpath ${CRYOSPARC_CACHE_DIR}/ --ssdquota ${CRYOSPARC_CACHE_QUOTA:-2500000} --ssdreserve ${CRYOSPARC_CACHE_FREE:-5000}"
   if [ ! -z $CRYOSPARC_WORKER_NOSSD ]; then
     SSD_OPTS="--nossd"
   fi
-  ${CRYOSPARC_WORKER_DIR}/bin/cryosparcw connect --worker ${CRYOSPARC_MASTER_HOSTNAME} --master ${CRYOSPARC_MASTER_HOSTNAME} ${SSD_OPTS} ${NOGPU}
+  ${CRYOSPARC_WORKER_DIR}/bin/cryosparcw connect --worker ${CRYOSPARC_MASTER_HOSTNAME} --master ${CRYOSPARC_MASTER_HOSTNAME} --port ${CRYOSPARC_BASE_PORT} ${SSD_OPTS} ${NOGPU}
 
   echo "Success starting cryosparc worker"
 fi
@@ -106,7 +114,11 @@ fi
 ###
 # monitor forever
 ###
-echo "done... tailing logs..."
-while [ 1 ]; do
-  tail -f ${CRYOSPARC_MASTER_DIR}/run/command_core.log
-done
+if [ "$CRYOSPARC_TAIL_LOGS" == "1" ]; then
+  echo "tailing logs..."
+  while [ 1 ]; do
+    tail -f ${CRYOSPARC_MASTER_DIR}/run/command_core.log
+  done
+fi
+
+
