@@ -48,7 +48,7 @@ ARG CRYOSPARC_VERSION
 ENV CRYOSPARC_VERSION=${CRYOSPARC_VERSION}
 
 # install master
-ENV CRYOSPARC_MASTER_DIR ${CRYOSPARC_ROOT_DIR}/cryosparc2_master
+ENV CRYOSPARC_MASTER_DIR ${CRYOSPARC_ROOT_DIR}/cryosparc_master
 RUN --mount=type=secret,id=cryosparc_license_id \
   curl -L https://get.cryosparc.com/download/master-v${CRYOSPARC_VERSION}/$(cat /run/secrets/cryosparc_license_id) | tar -xz \
 	&& cd ${CRYOSPARC_MASTER_DIR} \
@@ -59,7 +59,7 @@ RUN --mount=type=secret,id=cryosparc_license_id \
 RUN sed -i 's:    disk_has_space=.*:    disk_has_space="true":g'  ${CRYOSPARC_MASTER_DIR}/bin/cryosparcm
 
 # install worker
-ENV CRYOSPARC_WORKER_DIR ${CRYOSPARC_ROOT_DIR}/cryosparc2_worker
+ENV CRYOSPARC_WORKER_DIR ${CRYOSPARC_ROOT_DIR}/cryosparc_worker
 RUN --mount=type=secret,id=cryosparc_license_id \
   curl -L https://get.cryosparc.com/download/worker-v${CRYOSPARC_VERSION}/$(cat /run/secrets/cryosparc_license_id) | tar -xz \
   && cd ${CRYOSPARC_WORKER_DIR} \
