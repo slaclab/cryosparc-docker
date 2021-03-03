@@ -64,7 +64,7 @@ create_account() {
   local account=$1;
   local password=$2;
   local name=$3;
-  cryosparcm createuser    --email ${account} --password ${password} --name ${name};
+  cryosparcm createuser    --email ${account} --password ${password} --name ${name} --firstname ${name} --lastname ${name};
   cryosparcm resetpassword --email ${account} --password ${password};
 }
 export -f create_account
