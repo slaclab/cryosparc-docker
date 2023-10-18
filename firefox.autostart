@@ -1,0 +1,6 @@
+[Desktop Entry]
+Type=Application
+Exec=/usr/bin/firefox http://localhost:$(cat $HOME/cryosparc-v2/config.sh | awk '/CRYOSPARC_BASE_PORT/{ split($2,a,"="); print a[2] }')
+Hidden=false
+X-GNOME-Autostart-enabled=true
+Name[en_US]=Firefox

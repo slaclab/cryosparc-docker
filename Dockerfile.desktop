@@ -3,8 +3,10 @@ FROM slaclab/xfce:ubuntu18.04
 
 ENV DEBIAN_FRONTEND noninteractive
 
-RUN apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv 2930ADAE8CAF5059EE73BB4B58712A2291FA4AD5 \
-  && echo "deb [ arch=amd64,arm64 ] https://repo.mongodb.org/apt/ubuntu xenial/mongodb-org/3.6 multiverse" | tee /etc/apt/sources.list.d/mongodb-org-3.6.list \
+#RUN apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv 2930ADAE8CAF5059EE73BB4B58712A2291FA4AD5 \
+WORKDIR /etc/apt/keyrings
+RUN wget --no-check-certificate -qO ubuntu1804-Release.gpg https://developer.download.nvidia.com/compute/cuda/repos/ubuntu1804/x86_64/cuda-ubuntu1804-keyring.gpg \
+  && apt-key add /etc/apt/keyrings/ubuntu1804-Release.gpg \
   && apt-get update \
   && apt-get install -y --no-install-recommends \
     zip unzip \
@@ -23,9 +25,14 @@ RUN apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv 2930ADAE8CAF505
     openssh-server \
     jq \
     munge \
-    mongodb-org-shell mongodb-org-tools \
-  && curl -sL https://deb.nodesource.com/setup_6.x | bash - \
+  && curl -sL https://deb.nodesource.com/setup_14.x | bash - \
   && apt-get install -y nodejs \
+  #&& curl -fsSL https://repo.mongodb.org/apt/ubuntu/dists/xenial/mongodb-org/6.0/Release.gpg | tee /usr/share/keyrings/mongodb.gpg \
+  #&& echo "deb [ arch=amd64,arm64 signed-by=/usr/share/keyrings/mongodb.gpg ] https://repo.mongodb.org/apt/ubuntu xenial/mongodb-org/6.0 multiverse" | tee /etc/apt/sources.list.d/mongodb-org-6.0.list \
+  && curl -fsSL https://www.mongodb.org/static/pgp/server-6.0.asc | apt-key add -\
+  && echo "deb [ arch=amd64,arm64 ] https://repo.mongodb.org/apt/ubuntu bionic/mongodb-org/6.0 multiverse" | tee /etc/apt/sources.list.d/mongodb-org-6.0.list \
+  && apt-get update \
+  && apt-get install -y mongodb-mongosh mongodb-database-tools \
   && rm -rf /var/lib/apt/lists/* \
   && ln -s /usr/lib/x86_64-linux-gnu/libtiff.so.5 /usr/lib/x86_64-linux-gnu/libtiff.so.3
 
@@ -39,18 +46,20 @@ ENV CRYOSPARC_VERSION=${CRYOSPARC_VERSION}
 ARG CRYOSPARC_PATCH
 ENV CRYOSPARC_PATCH=${CRYOSPARC_PATCH}
 
+RUN echo "USER=`id -u -n`"
 # install master
 ENV CRYOSPARC_MASTER_DIR ${CRYOSPARC_ROOT_DIR}/cryosparc_master
 RUN --mount=type=secret,id=cryosparc_license_id \
   curl -L https://get.cryosparc.com/download/master-v${CRYOSPARC_VERSION}/$(cat /run/secrets/cryosparc_license_id) | tar -xz \
   && cd ${CRYOSPARC_MASTER_DIR} \
-  && bash ./install.sh --license "$(cat /run/secrets/cryosparc_license_id)" --yes --allowroot \
-  && sed -i 's/^export CRYOSPARC_LICENSE_ID=.*$/export CRYOSPARC_LICENSE_ID=TBD/g' ${CRYOSPARC_MASTER_DIR}/config.sh 
+  && sed -i '/^# Other$/ a echo \"CRYOSPARC_FORCE_USER=true\" >> config.sh' ${CRYOSPARC_MASTER_DIR}/install.sh \
+  && bash ./install.sh --license "$(cat /run/secrets/cryosparc_license_id)" --allowroot --yes  \
+  && sed -i 's/^export CRYOSPARC_LICENSE_ID=.*$/export CRYOSPARC_LICENSE_ID=TBD/g' ${CRYOSPARC_MASTER_DIR}/config.sh
 
 # update patches
-RUN wget https://get.cryosparc.com/patch_get/v${CRYOSPARC_VERSION}+${CRYOSPARC_PATCH}/master -O ${CRYOSPARC_ROOT_DIR}/cryosparc_master_patch.tar.gz \
+RUN if [ "" != "${CRYOSPARC_PATCH}" ]; then wget https://get.cryosparc.com/patch_get/v${CRYOSPARC_VERSION}+${CRYOSPARC_PATCH}/master -O ${CRYOSPARC_ROOT_DIR}/cryosparc_master_patch.tar.gz \
   && tar -vxzf ${CRYOSPARC_ROOT_DIR}/cryosparc_master_patch.tar.gz --overwrite --strip-components=1 --directory=${CRYOSPARC_MASTER_DIR} \
-  && rm -f ${CRYOSPARC_ROOT_DIR}/cryosparc_master_patch.tar.gz
+  && rm -f ${CRYOSPARC_ROOT_DIR}/cryosparc_master_patch.tar.gz; fi
 
 # patches
 RUN sed -i 's:    disk_has_space=.*:    disk_has_space="true":g'  ${CRYOSPARC_MASTER_DIR}/bin/cryosparcm
@@ -64,13 +73,13 @@ RUN --mount=type=secret,id=cryosparc_license_id \
   && sed -i 's/^export CRYOSPARC_LICENSE_ID=.*$/export CRYOSPARC_LICENSE_ID=TBD/g' ${CRYOSPARC_WORKER_DIR}/config.sh 
 
 # update patches
-RUN wget https://get.cryosparc.com/patch_get/v${CRYOSPARC_VERSION}+${CRYOSPARC_PATCH}/worker -O ${CRYOSPARC_ROOT_DIR}/cryosparc_worker_patch.tar.gz \
+RUN if [ ! -z "${CRYOSPARC_PATCH}" ]; then wget https://get.cryosparc.com/patch_get/v${CRYOSPARC_VERSION}+${CRYOSPARC_PATCH}/worker -O ${CRYOSPARC_ROOT_DIR}/cryosparc_worker_patch.tar.gz \
   && tar -vxzf ${CRYOSPARC_ROOT_DIR}/cryosparc_worker_patch.tar.gz --overwrite --strip-components=1 --directory=${CRYOSPARC_WORKER_DIR} \
-  && rm -f ${CRYOSPARC_ROOT_DIR}/cryosparc_worker_patch.tar.gz
+  && rm -f ${CRYOSPARC_ROOT_DIR}/cryosparc_worker_patch.tar.gz; fi
 
 # compile libtiff
-RUN ${CRYOSPARC_MASTER_DIR}/deps/anaconda/envs/cryosparc_master_env/bin/python3.7 ${CRYOSPARC_MASTER_DIR}/cryosparc_compute/blobio/tiff.py \
-  && ${CRYOSPARC_WORKER_DIR}/deps/anaconda/envs/cryosparc_worker_env/bin/python3.7 ${CRYOSPARC_WORKER_DIR}/cryosparc_compute/blobio/tiff.py
+RUN ${CRYOSPARC_MASTER_DIR}/deps/anaconda/envs/cryosparc_master_env/bin/python3 ${CRYOSPARC_MASTER_DIR}/cryosparc_compute/blobio/tiff.py \
+  && ${CRYOSPARC_WORKER_DIR}/deps/anaconda/envs/cryosparc_worker_env/bin/python3 ${CRYOSPARC_WORKER_DIR}/cryosparc_compute/blobio/tiff.py
 
 # install cryosparc live
 ARG CRYOSPARC_LIVE
@@ -90,10 +99,10 @@ RUN --mount=type=secret,id=cryosparc_license_id \
 ####
 ## install motioncor
 ####
-ARG MOTIONCOR2_VERSION=1.2.3
+ARG MOTIONCOR2_VERSION=1.6.3
 ENV MOTIONCOR2_VERSION=${MOTIONCOR2_VERSION}
 RUN cd /usr/local/bin \
-  && curl -L 'https://drive.google.com/uc?export=download&id=17dOr87lhhxGhg6xQYr4f8eo0OEo-GdUI' > MotionCor2_${MOTIONCOR2_VERSION}.zip \
+  && curl -L 'https://drive.google.com/uc?export=download&id=1bzbk4Cl9dDDOZu01RKDuLsNtbiJytUMK' > MotionCor2_${MOTIONCOR2_VERSION}.zip \
   && unzip MotionCor2_${MOTIONCOR2_VERSION}.zip \
   && rm -f MotionCor2_${MOTIONCOR2_VERSION}.zip \
   && ln -sf MotionCor2_${MOTIONCOR2_VERSION}-Cuda100 MotionCor2
@@ -101,7 +110,7 @@ RUN cd /usr/local/bin \
 ###
 # install topaz
 ###
-ARG TOPAZ_VERSION=0.2.3
+ARG TOPAZ_VERSION=0.2.5
 ENV TOPAZ_VERSION=${TOPAZ_VERSION}
 RUN /app/cryosparc_worker/deps/anaconda/bin/conda install topaz=${TOPAZ_VERSION} cudatoolkit=10.1 -c tbepler -c pytorch
 
