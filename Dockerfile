@@ -105,10 +105,10 @@ RUN --mount=type=secret,id=cryosparc_license_id \
 ####
 ## install motioncor
 ####
-ARG MOTIONCOR2_VERSION=1.4.4
+ARG MOTIONCOR2_VERSION=1.6.4
 ENV MOTIONCOR2_VERSION=${MOTIONCOR2_VERSION}
 RUN cd /usr/local/bin \
-  && curl -L 'https://drive.google.com/uc?export=download&id=15CwzXfqqnYE7XpkZuT94H4XjbNUDUt4B' > MotionCor2_${MOTIONCOR2_VERSION}.zip \
+  && curl -L 'https://drive.google.com/uc?export=download&id=1hskY_AbXVgrl_BUIjWokDNLZK0c1FLxF' > MotionCor2_${MOTIONCOR2_VERSION}.zip \
   && unzip MotionCor2_${MOTIONCOR2_VERSION}.zip \
   && rm -f MotionCor2_${MOTIONCOR2_VERSION}.zip \
   && ln -sf MotionCor2_${MOTIONCOR2_VERSION}-Cuda100 MotionCor2
