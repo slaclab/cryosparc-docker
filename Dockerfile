@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:experimental
-FROM nvidia/cuda:11.4.1-devel-ubuntu20.04
+FROM nvidia/cuda:11.4.3-devel-ubuntu20.04
 
 ENV DEBIAN_FRONTEND noninteractive
 
@@ -11,9 +11,10 @@ ARG SLURMGROUP=1034
 RUN groupadd -f -g $SLURMGROUP slurm \
     && useradd  -m -c "SLURM workload manager" -d /var/lib/slurm -u $SLURMUSER -g slurm  -s /bin/bash slurm
 
-RUN apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv 2930ADAE8CAF5059EE73BB4B58712A2291FA4AD5 \
+RUN apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys 2930ADAE8CAF5059EE73BB4B58712A2291FA4AD5 2F59B5F99B1BE0B4\
   && apt-get update \
   && apt-get install -y --no-install-recommends \
+    apt-utils \
     zip unzip \
     python \
     python3 \
@@ -30,7 +31,11 @@ RUN apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv 2930ADAE8CAF505
     openssh-server \
     jq \
     munge \
-  && curl -sL https://deb.nodesource.com/setup_19.x | bash - \
+    ca-certificates \
+    gnupg \
+  && curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | gpg --dearmor -o /usr/share/keyrings/nodesource.gpg \
+  && echo "deb [ signed-by=/usr/share/keyrings/nodesource.gpg ] https://deb.nodesource.com/node_21.x nodistro main" | tee /etc/apt/sources.list.d/nodesource.list \
+  && apt-get update \
   && apt-get install -y nodejs \
   && curl -fsSL https://repo.mongodb.org/apt/ubuntu/dists/focal/mongodb-org/6.0/Release.gpg | tee /usr/share/keyrings/mongodb.gpg \
   && echo "deb [ arch=amd64,arm64 signed-by=/usr/share/keyrings/key-file.gpg ] https://repo.mongodb.org/apt/ubuntu focal/mongodb-org/6.0 multiverse" | tee /etc/apt/sources.list.d/mongodb-org-6.0.list \
@@ -53,8 +58,17 @@ ENV CRYOSPARC_MASTER_DIR ${CRYOSPARC_ROOT_DIR}/cryosparc_master
 RUN --mount=type=secret,id=cryosparc_license_id \
   curl -L https://get.cryosparc.com/download/master-v${CRYOSPARC_VERSION}/$(cat /run/secrets/cryosparc_license_id) | tar -xz \
 	&& cd ${CRYOSPARC_MASTER_DIR} \
+  && sed -i '/^echo "# Other" >> config.sh$/a echo \"CRYOSPARC_FORCE_USER=true\" >> config.sh' ./install.sh \
   && bash ./install.sh --license "$(cat /run/secrets/cryosparc_license_id)" --yes --allowroot \
   && sed -i 's/^export CRYOSPARC_LICENSE_ID=.*$/export CRYOSPARC_LICENSE_ID=TBD/g' ${CRYOSPARC_MASTER_DIR}/config.sh 
+
+ARG CRYOSPARC_PATCH
+ENV CRYOSPARC_PATCH=${CRYOSPARC_PATCH}
+
+# update patches
+RUN if [ ! -z "${CRYOSPARC_PATCH}" ]; then curl -L https://get.cryosparc.com/patch_get/v${CRYOSPARC_VERSION}+${CRYOSPARC_PATCH}/master -o ${CRYOSPARC_ROOT_DIR}/cryosparc_master_patch.tar.gz \
+  && tar -vxzf ${CRYOSPARC_ROOT_DIR}/cryosparc_master_patch.tar.gz --overwrite --strip-components=1 --directory=${CRYOSPARC_MASTER_DIR} \
+  && rm -f ${CRYOSPARC_ROOT_DIR}/cryosparc_master_patch.tar.gz; fi
 
 # patches
 RUN sed -i 's:    disk_has_space=.*:    disk_has_space="true":g'  ${CRYOSPARC_MASTER_DIR}/bin/cryosparcm
@@ -65,7 +79,13 @@ RUN --mount=type=secret,id=cryosparc_license_id \
   curl -L https://get.cryosparc.com/download/worker-v${CRYOSPARC_VERSION}/$(cat /run/secrets/cryosparc_license_id) | tar -xz \
   && cd ${CRYOSPARC_WORKER_DIR} \
   && bash ./install.sh --license "$(cat /run/secrets/cryosparc_license_id)" --yes --cudapath /usr/local/cuda \
+  && sed -i '/^echo "# Other" >> config.sh$/a echo \"CRYOSPARC_FORCE_USER=true\" >> config.sh' ./install.sh \
   && sed -i 's/^export CRYOSPARC_LICENSE_ID=.*$/export CRYOSPARC_LICENSE_ID=TBD/g' ${CRYOSPARC_WORKER_DIR}/config.sh 
+
+# update patches
+RUN if [ ! -z "${CRYOSPARC_PATCH}" ]; then curl -L https://get.cryosparc.com/patch_get/v${CRYOSPARC_VERSION}+${CRYOSPARC_PATCH}/worker -o ${CRYOSPARC_ROOT_DIR}/cryosparc_worker_patch.tar.gz \
+  && tar -vxzf ${CRYOSPARC_ROOT_DIR}/cryosparc_worker_patch.tar.gz --overwrite --strip-components=1 --directory=${CRYOSPARC_WORKER_DIR} \
+  && rm -f ${CRYOSPARC_ROOT_DIR}/cryosparc_worker_patch.tar.gz; fi
 
 # install cryosparc live
 ARG CRYOSPARC_LIVE
