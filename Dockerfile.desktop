@@ -1,10 +1,10 @@
 # syntax=docker/dockerfile:experimental
-FROM slaclab/x11-docker:20231115.0
+FROM slaclab/x11-desktop:20231115.0
 
 ENV DEBIAN_FRONTEND noninteractive
 
 #RUN apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv 2930ADAE8CAF5059EE73BB4B58712A2291FA4AD5 \
-WORKDIR /etc/apt/keyrings
+#WORKDIR /etc/apt/keyrings
 RUN curl -fsSL https://www.mongodb.org/static/pgp/server-6.0.asc | apt-key add -\
   && echo "deb [ arch=amd64,arm64 ] https://repo.mongodb.org/apt/ubuntu jammy/mongodb-org/6.0 multiverse" | tee /etc/apt/sources.list.d/mongodb-org-6.0.list \
   && apt-get update \
@@ -16,7 +16,6 @@ RUN curl -fsSL https://www.mongodb.org/static/pgp/server-6.0.asc | apt-key add -
     curl \
     sudo \
     netbase iputils-ping net-tools \
-    munge \
     nodejs \
     mongodb-mongosh mongodb-database-tools \
   && rm -rf /var/lib/apt/lists/* \

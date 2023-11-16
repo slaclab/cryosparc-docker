@@ -31,8 +31,11 @@ build: tag
 	-t $(IMAGE):${TAG}
 
 push: build
-	sudo $(CONTAINER_RUNTIME) push $(IMAGE):${TAG}
+	$(CONTAINER_RUNTIME) push $(IMAGE):${TAG}
 
-singularity: tag
+apptainer: tag
 	mkdir -p ${CRYOSPARC_IMAGE_INSTALL_DIR}
 	echo apptainer pull -F ${CRYOSPARC_IMAGE_INSTALL_DIR}/cryosparc-desktop@${CRYOSPARC_FULL_VERSION}.sif docker://slaclab/cryosparc-desktop:${TAG}
+
+all: build push apptainer
+ 
