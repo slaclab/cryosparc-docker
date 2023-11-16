@@ -1,17 +1,9 @@
-CRYOSPARC_VERSION ?= 4.0.3
-CRYOSPARC_PATCH ?= 
+CRYOSPARC_VERSION ?= 4.4.0
+CRYOSPARC_PATCH ?= 231114
 CRYOSPARC_RELEASE ?= 0
-#CRYOSPARC_FULL_VERSION ?= ${CRYOSPARC_VERSION}-${CRYOSPARC_PATCH}
-#TAG ?= ${CRYOSPARC_FULL_VERSION}-${CRYOSPARC_RELEASE}
 
-#docker:
-#	sudo DOCKER_BUILDKIT=1 docker build \
-#		--build-arg CRYOSPARC_VERSION=${CRYOSPARC_VERSION} \
-#		--progress=plain \
-#		--secret id=cryosparc_license_id,src=./license_id.txt \
-#		. \
-#		-t slaclab/cryosparc-docker:${TAG}
-#	sudo docker push slaclab/cryosparc-docker:${TAG}
+CONTAINER_RUNTIME ?= docker
+IMAGE ?= slaclab/cryosparc-desktop
 
 tag:
 ifeq ($(CRYOSPARC_PATCH),)
@@ -19,22 +11,28 @@ CRYOSPARC_FULL_VERSION = $(CRYOSPARC_VERSION)
 else
 CRYOSPARC_FULL_VERSION = $(CRYOSPARC_VERSION)+$(CRYOSPARC_PATCH)
 endif
-TAG = $(CRYOSPARC_FULL_VERSION)-$(CRYOSPARC_RELEASE)
-CRYOSPARC_IMAGE_INSTALL_DIR=/sdf/group/cryoem/sw/images/cryosparc/${CRYSPARC_FULL_VERSION}-desktop
+TAG = $(subst +,-,$(CRYOSPARC_FULL_VERSION)-$(CRYOSPARC_RELEASE))
+CRYOSPARC_IMAGE_INSTALL_DIR = /sdf/group/cryoem/sw/images/cryosparc/$(CRYOSPARC_FULL_VERSION)-desktop
 
 echo_tag: tag
 	echo "TAG=$(TAG)"
 
-desktop: tag
-	sudo COMPOSE_DOCKER_CLI_BUILD=1 DOCKER_BUILDKIT=1 docker build \
+license:
+	mkdir .secret
+	echo ${CRYOSPARC_LICENSE_ID} > .secret/license_id.txt
+
+build: tag
+	COMPOSE_DOCKER_CLI_BUILD=1 DOCKER_BUILDKIT=1 $(CONTAINER_RUNTIME) build \
 		--build-arg CRYOSPARC_VERSION=${CRYOSPARC_VERSION} \
 		--build-arg CRYOSPARC_PATCH=${CRYOSPARC_PATCH} \
 		--progress=plain \
-		--secret id=cryosparc_license_id,src=./license_id.txt \
+		--secret id=cryosparc_license_id,src=.secret/license_id.txt \
 		. -f Dockerfile.desktop \
-	-t slaclab/cryosparc-desktop:${TAG}
-	sudo docker push slaclab/cryosparc-desktop:${TAG}
+	-t $(IMAGE):${TAG}
 
-desktop-singularity: tag
+push: build
+	sudo $(CONTAINER_RUNTIME) push $(IMAGE):${TAG}
+
+singularity: tag
 	mkdir -p ${CRYOSPARC_IMAGE_INSTALL_DIR}
-	singularity pull -F ${CRYOSPARC_IMAGE_INSTALL_DIR}/cryosparc-desktop@${CRYOSPARC_FULL_VERSION}.sif docker://slaclab/cryosparc-desktop:${TAG}
+	echo apptainer pull -F ${CRYOSPARC_IMAGE_INSTALL_DIR}/cryosparc-desktop@${CRYOSPARC_FULL_VERSION}.sif docker://slaclab/cryosparc-desktop:${TAG}

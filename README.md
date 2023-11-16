@@ -1,11 +1,29 @@
 # docker image for cryosparc v2
 
-You first need to obtain a license for cryosparc via https://cryosparc.com/download/
+You first need to obtain a license for cryosparc via https://cryosparc.com/download/ and cat it into a location that so that the docker build process can pick it up:
 
-build with your license key from cryosparc:
+```
+export CRYOSPARC_LICENSE_ID=<BLAH>
+make license
+```
 
-    export CRYOSPARC_LICENSE_ID=<BLAH>
-    docker build --build-arg CRYOSPARC_LICENSE_ID=${CRYOSPARC_LICENSE_ID} . -t slaclab/cryosparc-docker:2.2.0
+All this really does is to put it into a text file under .secret.
+
+Then to actually build the image:
+
+```
+make build
+```
+    
+You can change the version to be installed via environment variables, eg to install
+
+```
+CRYOSPARC_VERSION=4.4.0 CRYOSPARC_PATCH=231114 make build
+```
+
+
+Developer
+===
     
 run (for testing) via
 
