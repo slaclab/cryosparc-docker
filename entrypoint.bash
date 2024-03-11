@@ -149,11 +149,11 @@ fi
 
 
 # ensure we have a cryosparc directory under home
-export CRYOSPARC_DATADIR=${USER_HOMEDIR}/cryosparc-v2
+export CRYOSPARC_DATADIR=${USER_HOMEDIR}/cryosparc
 echo "Creating cryosparc datadir ${CRYOSPARC_DATADIR}..."
 mkdir -p ${CRYOSPARC_DATADIR} 
 mkdir -p ${CRYOSPARC_DATADIR}/run
-mkdir -p ${CRYOSPARC_DATADIR}/cryosparc2_database
+mkdir -p ${CRYOSPARC_DATADIR}/cryosparc_database
 
 if [[ ! -e "${CRYOSPARC_DATADIR}/config.sh" ]]; then
     # copy config
@@ -179,11 +179,11 @@ chown ${U_NAME} ${CRYOSPARC_WORKER_DIR}/
 ls -lah ${CRYOSPARC_MASTER_DIR}
 
 # change code
-#sed -i 's:    disk_has_space=.*:    disk_has_space="true":g' /app/cryosparc2_master/bin/cryosparcm
+#sed -i 's:    disk_has_space=.*:    disk_has_space="true":g' /app/cryosparc_master/bin/cryosparcm
 
 # gui changes
-#sed -i 's|"url": "/fonts/woff|"url": "/user/ytl/proxy/absolute/39000/fonts/woff/|g' /app/cryosparc2_master/cryosparc2_webapp/bundle/programs/web.browser/program.json
-#chmod -R ugo+rwx /app/cryosparc2_master/cryosparc2_webapp/bundle/
+#sed -i 's|"url": "/fonts/woff|"url": "/user/ytl/proxy/absolute/39000/fonts/woff/|g' /app/cryosparc_master/cryosparc_webapp/bundle/programs/web.browser/program.json
+#chmod -R ugo+rwx /app/cryosparc_master/cryosparc_webapp/bundle/
 
 # down privs to user
 exec ${sudo} /cryosparc.sh

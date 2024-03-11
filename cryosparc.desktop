@@ -1,6 +1,6 @@
 [Desktop Entry]
 Type=Application
-Exec=sh /tmp/cryosparc_launcher.sh
+Exec=sh ./cryosparc_launcher.sh
 Hidden=false
 X-GNOME-Autostart-enabled=true
-Name=CryoSPARC Launcher
+Name=CryoSPARC Web App
