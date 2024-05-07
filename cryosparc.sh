@@ -59,11 +59,7 @@ cryosparcm restart
 # ensure that the mongo replset is correct
 MONGO_PORT=$(( $CRYOSPARC_BASE_PORT + 1 ))
 export CRYOSPARC_MONGO_EXTRA_FLAGS="  --unixSocketPrefix ${LSCRATCH}"
-mongosh localhost:$MONGO_PORT  <<EOF
-cfg = rs.conf()
-cfg.members[0].host = "localhost:$MONGO_PORT"
-rs.reconfig(cfg, { force: true } )
-EOF
+${CRYOSPARC_MASTER_DIR}/bin/cryosparcm fixdbport
 
 # creat cryosparc local accounts
 create_account() {
@@ -74,7 +70,7 @@ create_account() {
   cryosparcm resetpassword --email ${account} --password ${password};
 }
 export -f create_account
-# always set the passwrod to license
+# always set the password to license
 create_account ${ACCOUNT} "${CRYOSPARC_PASSWORD:-${CRYOSPARC_LICENSE_ID}}" "${THIS_USER}"
 # add additional
 if [ -e "/init.d/accounts" ]; then
@@ -132,7 +128,6 @@ fi
 ###
 export CRYOSPARC_BASE_PORT=$(cat $HOME/cryosparc/config.sh | awk '/CRYOSPARC_BASE_PORT/{ split($2,a,"="); print a[2] }')
 echo "/usr/bin/firefox http://localhost:${CRYOSPARC_BASE_PORT}" > ${LSCRATCH}/cryosparc_launcher.sh
-cp /cryosparc.desktop ${LSCRATCH}/cryosparc.desktop 
-chmod +x ${LSCRATCH}/cryosparc.desktop
-cd ${HOME}/Desktop
-ln -s ${LSCRATCH}/cryosparc.desktop "Launch CryoSPARC"
+cp /cryosparc.desktop ${HOME}/Desktop/cryosparc.desktop 
+chmod +x ${HOME}/Desktop/cryosparc.desktop
+ln -sfn ${LSCRATCH}/cryosparc_launcher.sh "${HOME}/Desktop/cryosparc_launcher.sh"
