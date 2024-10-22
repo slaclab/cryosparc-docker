@@ -6,10 +6,10 @@ ENV DEBIAN_FRONTEND noninteractive
 COPY mozilla.pin /etc/apt/preferences.d/mozilla 
 RUN curl -fsSL https://www.mongodb.org/static/pgp/server-6.0.asc | gpg --dearmor -o /usr/share/keyrings/mongodb-6.0-keyring.gpg \
   && echo "deb [ arch=amd64,arch64 signed-by=/usr/share/keyrings/mongodb-6.0-keyring.gpg ] https://repo.mongodb.org/apt/ubuntu jammy/mongodb-org/6.0 multiverse" | tee /etc/apt/sources.list.d/mongodb-org-6.0.list \
-  && apt-get update \
+  && apt-get update -y \
   && wget -q https://packages.mozilla.org/apt/repo-signing-key.gpg -O /usr/share/keyrings/packages.mozilla.org.asc \
   && echo "deb [ arch=amd64 signed-by=/usr/share/keyrings/packages.mozilla.org.asc ] https://packages.mozilla.org/apt mozilla main" > /etc/apt/sources.list.d/mozilla.list \
-  && apt-get update \
+  && apt-get update -y \
   && apt-get install -y --no-install-recommends \
     firefox \
     zip unzip \
@@ -76,8 +76,9 @@ RUN ${CRYOSPARC_MASTER_DIR}/deps/anaconda/envs/cryosparc_master_env/bin/python3 
 ARG MOTIONCOR2_VERSION=1.4.5
 ENV MOTIONCOR2_VERSION=${MOTIONCOR2_VERSION}
 ENV CUDA_TOOLKIT_VERSION="Cuda100-10-22-2021"
-RUN cd /usr/local/bin \
-  && curl -L 'https://drive.google.com/uc?export=download&id=1-Ub5lBBmel8U8U0uibORiH6wfxp9I1kn' > MotionCor2_${MOTIONCOR2_VERSION}.zip \
+RUN --mount=type=secret,id=motioncor2_license_id \
+  && cd /usr/local/bin \
+  && curl -L 'https://drive.google.com/uc?export=download&id=$(cat /run/secrets/motioncor2_license_id)' > MotionCor2_${MOTIONCOR2_VERSION}.zip \
   && unzip MotionCor2_${MOTIONCOR2_VERSION}.zip \
   && rm -f MotionCor2_${MOTIONCOR2_VERSION}.zip \
   && ln -sf MotionCor2_${MOTIONCOR2_VERSION}-${CUDA_TOOLKIT_VERSION} MotionCor2
@@ -88,7 +89,9 @@ RUN cd /usr/local/bin \
 ARG TOPAZ_VERSION=0.2.5
 ENV TOPAZ_VERSION=${TOPAZ_VERSION}
 ENV TOPAZ_CUDA_TOOLKIT_VERSION=12.2.0
-RUN /app/cryosparc_worker/deps/anaconda/bin/conda install topaz=${TOPAZ_VERSION} cuda-libraries-dev cuda-nvcc cuda-nvtx cuda-cupti -c nvidia/label/cuda-${TOPAZ_CUDA_TOOLKIT_VERSION} -c tbepler -c pytorch
+RUN ${CRYOSPARC_WORKER_DIR}/deps/anaconda/bin/conda install topaz=${TOPAZ_VERSION} cuda-libraries-dev cuda-nvcc cuda-nvtx cuda-cupti -c nvidia/label/cuda-${TOPAZ_CUDA_TOOLKIT_VERSION} -c tbepler -c pytorch
+RUN ${CRYOSPARC_WORKER_DIR}/deps/anaconda/bin/conda create -n topaz python=3.6
+COPY topaz.sh ${CRYOSPARC_WORKER_DIR}/deps/anaconda/bin/topaz.sh
 
 ###
 #

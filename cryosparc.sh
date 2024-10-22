@@ -54,12 +54,16 @@ THIS_USER=$(whoami)
 THIS_USER_SUFFIX=${USER_SUFFIX:-'slac.stanford.edu'}
 ACCOUNT="${THIS_USER}@${THIS_USER_SUFFIX}"
 rm -f "${SOCK_FILE}" || true
+cryosparcm start database
+cryosparcm fixdbport
 cryosparcm restart
 
 # ensure that the mongo replset is correct
 MONGO_PORT=$(( $CRYOSPARC_BASE_PORT + 1 ))
 export CRYOSPARC_MONGO_EXTRA_FLAGS="  --unixSocketPrefix ${LSCRATCH}"
+${CRYOSPARC_MASTER_DIR}/bin/cryosparcm start database
 ${CRYOSPARC_MASTER_DIR}/bin/cryosparcm fixdbport
+${CRYOSPARC_MASTER_DIR}/bin/cryosparcm restart
 
 # creat cryosparc local accounts
 create_account() {
@@ -78,6 +82,8 @@ if [ -e "/init.d/accounts" ]; then
 fi
 
 # need to restart to get login prompt
+cryosparcm start database
+cryosparcm fixdbport
 cryosparcm restart
 
 echo "Success starting cryosparc master!"
