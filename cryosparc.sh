@@ -5,7 +5,7 @@ export HOME=${HOME:-$USER_HOMEDIR}
 export LSCRATCH=${LSCRATCH:-/lscratch/$USER}
 
 ###
-# master initiation
+# master initialization
 ###
 export CRYOSPARC_MASTER_HOSTNAME=${CRYOSPARC_MASTER_HOSTNAME:-localhost}
 if [ "${CRYOSPARC_LICENSE_ID}" == "" ]; then
