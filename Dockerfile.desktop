@@ -21,6 +21,7 @@ RUN curl -fsSL https://www.mongodb.org/static/pgp/server-6.0.asc | gpg --dearmor
     netbase iputils-ping net-tools \
     nodejs \
     mongodb-mongosh mongodb-database-tools \
+    supervisor \
   && apt-get remove chromium \
   && apt-get clean \
   && rm -rf /var/lib/apt/lists/* \
@@ -77,11 +78,11 @@ ARG MOTIONCOR2_VERSION=1.4.5
 ENV MOTIONCOR2_VERSION=${MOTIONCOR2_VERSION}
 ENV CUDA_TOOLKIT_VERSION="Cuda100-10-22-2021"
 RUN --mount=type=secret,id=motioncor2_license_id \
-  && cd /usr/local/bin \
-  && curl -L 'https://drive.google.com/uc?export=download&id=$(cat /run/secrets/motioncor2_license_id)' > MotionCor2_${MOTIONCOR2_VERSION}.zip \
+  cd /usr/local/bin \
+  && curl -L "https://drive.google.com/uc?export=download&id=$(cat /run/secrets/motioncor2_license_id)" > MotionCor2_${MOTIONCOR2_VERSION}.zip \
   && unzip MotionCor2_${MOTIONCOR2_VERSION}.zip \
   && rm -f MotionCor2_${MOTIONCOR2_VERSION}.zip \
-  && ln -sf MotionCor2_${MOTIONCOR2_VERSION}-${CUDA_TOOLKIT_VERSION} MotionCor2
+  && ln -sf MotionCor2_${MOTIONCOR2_VERSION}_${CUDA_TOOLKIT_VERSION} MotionCor2
 
 ###
 # install topaz
@@ -89,9 +90,16 @@ RUN --mount=type=secret,id=motioncor2_license_id \
 ARG TOPAZ_VERSION=0.2.5
 ENV TOPAZ_VERSION=${TOPAZ_VERSION}
 ENV TOPAZ_CUDA_TOOLKIT_VERSION=12.2.0
-RUN ${CRYOSPARC_WORKER_DIR}/deps/anaconda/bin/conda install topaz=${TOPAZ_VERSION} cuda-libraries-dev cuda-nvcc cuda-nvtx cuda-cupti -c nvidia/label/cuda-${TOPAZ_CUDA_TOOLKIT_VERSION} -c tbepler -c pytorch
+RUN ${CRYOSPARC_WORKER_DIR}/deps/anaconda/bin/conda install -y topaz=${TOPAZ_VERSION} cuda-libraries-dev cuda-nvcc cuda-nvtx cuda-cupti -c nvidia/label/cuda-${TOPAZ_CUDA_TOOLKIT_VERSION} -c tbepler -c pytorch
 RUN ${CRYOSPARC_WORKER_DIR}/deps/anaconda/bin/conda create -n topaz python=3.6
 COPY topaz.sh ${CRYOSPARC_WORKER_DIR}/deps/anaconda/bin/topaz.sh
+
+###
+# set up idle culler
+###
+COPY cryosparc_idle_culler.sh /usr/local/bin/cryosparc_idle_culler.sh
+RUN --mount=type=bind,source=supervisord.conf,target=/tmp/supervisord.conf \
+    cat /tmp/supervisord.conf >> /app/cryosparc_master/supervisord.conf
 
 ###
 #
