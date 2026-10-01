@@ -149,7 +149,10 @@ fi
 
 
 # ensure we have a cryosparc directory under home
-export CRYOSPARC_DATADIR=${USER_HOMEDIR}/cryosparc
+# Honour an externally supplied CRYOSPARC_DATADIR: CryoSPARC v5 uses a directory
+# separate from v4 (see MIGRATION-v5.md), and Open OnDemand passes it in. The
+# default is unchanged for callers that do not set it.
+export CRYOSPARC_DATADIR=${CRYOSPARC_DATADIR:-${USER_HOMEDIR}/cryosparc}
 echo "Creating cryosparc datadir ${CRYOSPARC_DATADIR}..."
 mkdir -p ${CRYOSPARC_DATADIR} 
 mkdir -p ${CRYOSPARC_DATADIR}/run
@@ -168,8 +171,27 @@ fi
 chown -R ${U_NAME} ${CRYOSPARC_DATADIR}
 
 ln -sf ${CRYOSPARC_DATADIR}/config.sh ${CRYOSPARC_MASTER_DIR}/config.sh
+# The worker reads its license and master hostname from config.sh in its own
+# directory -- not from "worker-config.sh", which nothing actually loads. Point
+# it at the same user config.sh the master uses, which is what Open OnDemand
+# does via its bind mounts:
+#   -B $CRYOSPARC_DATADIR/config.sh:$CRYOSPARC_WORKER_PATH/config.sh
+# Without this the worker keeps the image's baked CRYOSPARC_LICENSE_ID=TBD and
+# `cryosparcm worker connect` fails with a CoreSettings validation error on
+# license = 'TBD', leaving the session with no compute target.
+ln -sf ${CRYOSPARC_DATADIR}/config.sh ${CRYOSPARC_WORKER_DIR}/config.sh
 ln -sf ${CRYOSPARC_DATADIR}/worker-config.sh ${CRYOSPARC_WORKER_DIR}/worker-config.sh
-ln -sf ${CRYOSPARC_DATADIR}/run ${CRYOSPARC_MASTER_DIR}/run
+
+# v5 ships cryosparc_master/run as a real, root-owned directory (the installer
+# leaves a cli.log in it). `ln -sf` would then put the link *inside* it as
+# run/run and leave the root-owned directory in place. That breaks everything:
+# cryosparcm opens run/cli.log when it starts up, before it parses arguments, so
+# every single cryosparcm call -- even `--help` -- dies with a PermissionError
+# traceback. Remove the directory first.
+# (Open OnDemand bind-mounts over this path instead, so it is unaffected; this
+# matters for the docker/kubernetes path.)
+rm -rf ${CRYOSPARC_MASTER_DIR}/run
+ln -sfn ${CRYOSPARC_DATADIR}/run ${CRYOSPARC_MASTER_DIR}/run
 
 # stupid thing wants to create temp files within the master dir
 chown ${U_NAME} ${CRYOSPARC_MASTER_DIR}/

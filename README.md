@@ -41,3 +41,5 @@ notes
 
 - to enable access to file storage, the container will drop privs to that defined by JUPYTERHUB_USER, EXTERNAL_UID and EXTERNAL_GROUPS.
 
+
+> **Upgrading to v5?** See [MIGRATION-v5.md](MIGRATION-v5.md).
