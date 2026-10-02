@@ -1,6 +1,16 @@
 #!/bin/bash -x
+# Start a per-user CryoSPARC v5 instance inside the container.
+#
+# v5 replaced the v4 command line interface, so the command names here
+# differ from the v4 version of this script (see git history):
+#   cryosparcm fixdbport   -> cryosparcm database fixport
+#   cryosparcm createuser  -> cryosparcm user create
+#   cryosparcm resetpassword -> cryosparcm user resetpassword
+#   cryosparcw connect     -> cryosparcm worker connect
+#   cli get_scheduler_targets()/remove_scheduler_target_node() -> no equivalent;
+#       see purge_scheduler_targets() below.
 
-export PATH=${CRYOSPARC_MASTER_DIR}/bin:${CRYOSPARC_WORKER_DIR}/bin:${CRYOSPARC_MASTER_DIR}/deps/anaconda/bin/:$PATH
+export PATH=${CRYOSPARC_MASTER_DIR}/bin:${CRYOSPARC_WORKER_DIR}/bin:${CRYOSPARC_MASTER_DIR}/.pixi/envs/master/bin:$PATH
 export HOME=${HOME:-$USER_HOMEDIR}
 export LSCRATCH=${LSCRATCH:-/lscratch/$USER}
 
@@ -22,8 +32,8 @@ if [ -z "${CRYOSPARC_LICENSE_ID##*,*}" ]; then
   CRYOSPARC_LICENSE_ID=${licenses[${HOSTNAME##*-}]}
 fi
 
-CRYOSPARC_BASE_PORT=${CRYOSPARC_BASE_PORT:-"39000"}
-export CRYOSPARC_SUPERVISOR_SOCK_FILE="${LSCRATCH}/cryosparc-supervisor.sock" 
+CRYOSPARC_BASE_PORT=${CRYOSPARC_BASE_PORT:-"61000"}
+export CRYOSPARC_SUPERVISOR_SOCK_FILE="${LSCRATCH}/cryosparc-supervisor.sock"
 
 echo "Starting cryosparc master..."
 cd ${CRYOSPARC_MASTER_DIR}
@@ -32,8 +42,6 @@ printf "%s\n" "1,\$s/^export CRYOSPARC_MASTER_HOSTNAME=.*$/export CRYOSPARC_MAST
 printf "%s\n" "1,\$s/^export CRYOSPARC_LICENSE_ID=.*$/export CRYOSPARC_LICENSE_ID=${CRYOSPARC_LICENSE_ID}/g" wq | ed -s ${CRYOSPARC_MASTER_DIR}/config.sh
 printf "%s\n" "1,\$s|^export CRYOSPARC_DB_PATH=.*$|export CRYOSPARC_DB_PATH=${CRYOSPARC_DATADIR}/cryosparc_database|g" wq | ed -s ${CRYOSPARC_MASTER_DIR}/config.sh
 printf "%s\n" "1,\$s/^export CRYOSPARC_BASE_PORT=.*$/export CRYOSPARC_BASE_PORT=${CRYOSPARC_BASE_PORT}/g" wq | ed -s ${CRYOSPARC_MASTER_DIR}/config.sh
-#printf "%s\n" "export CRYOSPARC_SUPERVISOR_SOCK_FILE=${CRYOSPARC_SUPERVISOR_SOCK_FILE}" wq | ed -s ${CRYOSPARC_MASTER_DIR}/config.sh
-#printf "%s\n" "export CRYOSPARC_MONGO_EXTRA_FLAGS=\"  --unixSocketPrefix=${LSCRATCH}\"" wq | ed -s ${CRYOSPARC_MASTER_DIR}/config.sh
 echo "export CRYOSPARC_SUPERVISOR_SOCK_FILE=${CRYOSPARC_SUPERVISOR_SOCK_FILE}" >> ${CRYOSPARC_MASTER_DIR}/config.sh
 echo "export CRYOSPARC_MONGO_EXTRA_FLAGS=\"  --unixSocketPrefix=${LSCRATCH}\"" >> ${CRYOSPARC_MASTER_DIR}/config.sh
 if ! grep -q 'CRYOSPARC_FORCE_HOSTNAME=true' ${CRYOSPARC_MASTER_DIR}/config.sh; then
@@ -43,35 +51,35 @@ echo '====='
 cat ${CRYOSPARC_MASTER_DIR}/config.sh
 echo '====='
 
-# modify mongo path
-#sed -i 's|MONGO_URL="mongodb://%(ENV_CRYOSPARC_MASTER_HOSTNAME)s:%(ENV_CRYOSPARC_MONGO_PORT)s|MONGO_URL=mongodb://cryosparc-fpoitevi:%(ENV_CRYOSPARC_MONGO_PORT)s|g' ${CRYOSPARC_MASTER_DIR}/supervisord.conf
-#sed -i 's|MONGO_OPLOG_URL="mongodb://%(ENV_CRYOSPARC_MASTER_HOSTNAME)s:%(ENV_CRYOSPARC_MONGO_PORT)s|MONGO_OPLOG_URL="mongodb://cryosparc-fpoitevi:%(ENV_CRYOSPARC_MONGO_PORT)s|g' ${CRYOSPARC_MASTER_DIR}/supervisord.conf
-#sed -i 's|ROOT_URL="http://%(ENV_CRYOSPARC_MASTER_HOSTNAME)s:|ROOT_URL="http://cryosparc-fpoitevi:|g' ${CRYOSPARC_MASTER_DIR}/supervisord.conf
-#sed -i 's|file=%(ENV_CRYOSPARC_SUPERVISOR_SOCK_FILE)s|file=/lscratch/%(ENV_CRYOSPARC_SUPERVISOR_SOCK_FILE)s|g' ${CRYOSPARC_MASTER_DIR}/supervisord.conf
+###
+# database migration from v4 (must run with the user's own license already in
+# config.sh -- the v4->v5 upgrade authenticates against MongoDB using it)
+###
+if ! /usr/local/bin/cryosparc_db_migrate.sh; then
+  echo "CryoSPARC v5 database migration failed; refusing to start." >&2
+  echo "See ${CRYOSPARC_DATADIR}/run/ for the migration log." >&2
+  exit 1
+fi
 
 # envs
 THIS_USER=$(whoami)
 THIS_USER_SUFFIX=${USER_SUFFIX:-'slac.stanford.edu'}
 ACCOUNT="${THIS_USER}@${THIS_USER_SUFFIX}"
 rm -f "${SOCK_FILE}" || true
-cryosparcm start database
-cryosparcm fixdbport
-cryosparcm restart
 
-# ensure that the mongo replset is correct
-MONGO_PORT=$(( $CRYOSPARC_BASE_PORT + 1 ))
 export CRYOSPARC_MONGO_EXTRA_FLAGS="  --unixSocketPrefix ${LSCRATCH}"
-${CRYOSPARC_MASTER_DIR}/bin/cryosparcm start database
-${CRYOSPARC_MASTER_DIR}/bin/cryosparcm fixdbport
-${CRYOSPARC_MASTER_DIR}/bin/cryosparcm restart
+cryosparcm start database
+cryosparcm database fixport
+cryosparcm restart
 
 # creat cryosparc local accounts
 create_account() {
   local account=$1;
   local password=$2;
   local name=$3;
-  cryosparcm createuser    --email ${account} --password ${password} --username ${name} --firstname ${name} --lastname ${name};
-  cryosparcm resetpassword --email ${account} --password ${password};
+  cryosparcm user create --email ${account} --password ${password} --username ${name} \
+    --firstname ${name} --lastname ${name} --role admin;
+  cryosparcm user resetpassword --email ${account} --password ${password};
 }
 export -f create_account
 # always set the password to license
@@ -83,40 +91,130 @@ fi
 
 # need to restart to get login prompt
 cryosparcm start database
-cryosparcm fixdbport
+cryosparcm database fixport
 cryosparcm restart
 
-echo "Success starting cryosparc master!"
+# `cryosparcm restart` can return without the database actually being up (a
+# stale replica-set config, a port conflict, a failed mongod spawn). This used to
+# print "Success" unconditionally, so a dead instance looked like a healthy one.
+# Probe the API instead of trusting the exit status.
+wait_for_master() {
+  local tries=0
+  until cryosparcm cli "1+1" >/dev/null 2>&1; do
+    tries=$((tries + 1))
+    if [ "${tries}" -ge 36 ]; then
+      return 1
+    fi
+    sleep 5
+  done
+}
 
-# remove all existing worker threads
-${CRYOSPARC_MASTER_DIR}/bin/cryosparcm cli 'get_scheduler_targets()'  | python -c "import sys, ast, json; print( json.dumps(ast.literal_eval(sys.stdin.readline())) )" | jq '.[].name' | sed 's:"::g' | xargs -n1 -I \{\} ${CRYOSPARC_MASTER_DIR}/bin/cryosparcm cli 'remove_scheduler_target_node("'{}'")'
+if wait_for_master; then
+  echo "Success starting cryosparc master!"
+else
+  echo "########################################################################"
+  echo "ERROR: CryoSPARC did not finish starting. The web interface will not load."
+  echo "       Service status:"
+  cryosparcm status 2>&1 | sed -n '/process status/,/^───/p' || true
+  echo "       Logs: ${CRYOSPARC_DATADIR}/run/{database,api,command_vis}.log"
+  echo "########################################################################"
+  mkdir -p "${HOME}/Desktop" 2>/dev/null || true
+  {
+    echo "CryoSPARC failed to start."
+    echo
+    echo "Service status and errors are in:"
+    echo "  ${CRYOSPARC_DATADIR}/run/database.log"
+    echo "  ${CRYOSPARC_DATADIR}/run/api.log"
+    echo
+    echo "Please send those to the cryo-EM support team."
+  } > "${HOME}/Desktop/CRYOSPARC-FAILED-TO-START.txt" 2>/dev/null || true
+fi
+
+###
+# Remove scheduler targets left behind by previous sessions.
+#
+# Every Slurm allocation gives this container a new hostname, so without this the
+# user's lane list fills up with dead workers.
+#
+# v4 enumerated targets with `cryosparcm cli 'get_scheduler_targets()'`, which v5
+# removed. v5 still has `cryosparcm cli <python expr>`, which evaluates against
+# the database and prints JSON, so we read the targets document directly --
+# exact, rather than scraping the `cryosparcm resources` table. Targets live in a
+# single doc: db.sched_config{name:"targets"}.value[], each with a name and a
+# type of "node" or "cluster", which decides how it has to be removed.
+###
+TARGETS_EXPR="[[t['name'], (t.get('config') or t).get('type')] for t in (db.sched_config.find_one({'name':'targets'}) or {}).get('value',[])]"
+
+purge_scheduler_targets() {
+  local targets name type
+  targets=$(cryosparcm cli "${TARGETS_EXPR}" 2>/dev/null)
+
+  if [ -z "${targets}" ] || ! echo "${targets}" | jq -e . >/dev/null 2>&1; then
+    echo "WARNING: could not enumerate scheduler targets via 'cryosparcm cli'."
+    echo "WARNING: falling back to removing only the lanes we register ourselves;"
+    echo "WARNING: stale workers from previous sessions may remain in the lane list."
+    for info in /app/slurm/*/cluster_info.json; do
+      [ -f "${info}" ] || continue
+      name=$(jq -r '.name' "${info}")
+      [ -n "${name}" ] && [ "${name}" != "null" ] && cryosparcm cluster remove "${name}" || true
+    done
+    return
+  fi
+
+  while IFS=$'\t' read -r name type; do
+    [ -n "${name}" ] || continue
+    case "${type}" in
+      cluster) echo "Removing stale cluster lane '${name}'..."; cryosparcm cluster remove "${name}" || true ;;
+      node)    echo "Disconnecting stale worker '${name}'...";   cryosparcm worker disconnect --worker "${name}" || true ;;
+      *)       echo "Skipping target '${name}' of unknown type '${type}'." ;;
+    esac
+  done < <(echo "${targets}" | jq -r '.[] | @tsv')
+}
+purge_scheduler_targets
 
 # add additional job lanes
-if [ "${CRYOSPACE_ADD_JOB_LANES}" == "1" ]; then
+if [ "${CRYOSPACE_ADD_JOB_LANES}" == "1" ] && [ -d /app/slurm ]; then
   echo "Registering job lanes..."
   for i in `ls -1 /app/slurm/`; do
-    cd /app/slurm/$i
-    ${CRYOSPARC_MASTER_DIR}/bin/cryosparcm cluster connect
+    cryosparcm cluster connect --info /app/slurm/$i/cluster_info.json \
+                               --script /app/slurm/$i/cluster_script.sh
   done
   cd ${CRYOSPARC_MASTER_DIR}
+elif [ "${CRYOSPACE_ADD_JOB_LANES}" == "1" ]; then
+  echo "WARNING: CRYOSPACE_ADD_JOB_LANES=1 but /app/slurm is not present in this"
+  echo "WARNING: image, so no cluster lanes were registered."
 fi
 
 # local worker
 if [ "${CRYOSPARC_LOCAL_WORKER}" == "1" ]; then
   echo "Starting cryosparc local worker for ${CRYOSPARC_MASTER_HOSTNAME}..."
-  export CRYOSPARC_CACHE_DIR=${CRYOSPARC_CACHE_DIR:-"/lscratch/${THIS_USER}/cryosparc/"}
-  mkdir -p ${CRYOSPARC_CACHE_DIR}
-  NOGPU=""
+  export CRYOSPARC_CACHE_DIR=${CRYOSPARC_CACHE_DIR:-"/lscratch/${THIS_USER}/cryosparc"}
+  CRYOSPARC_CACHE_DIR=${CRYOSPARC_CACHE_DIR%/}
+  # v5's `cryosparcw connect` rejects a --ssdpath that does not exist
+  # ("Invalid value for '--ssdpath': Directory ... does not exist"), so a cache
+  # directory we failed to create means no compute target at all.
+  if ! mkdir -p "${CRYOSPARC_CACHE_DIR}"; then
+    echo "ERROR: could not create the SSD cache directory ${CRYOSPARC_CACHE_DIR}." >&2
+    echo "       CryoSPARC's local worker cannot be registered without it." >&2
+  fi
+  GPU_OPT=""
   if [ ! -z $CRYOSPARC_WORKER_NOGPU ]; then
-    NOGPU="--nogpu"
+    GPU_OPT="--no-gpu"
   fi
-  SSD_OPTS="--ssdpath ${CRYOSPARC_CACHE_DIR}/ --ssdquota ${CRYOSPARC_CACHE_QUOTA:-2500000} --ssdreserve ${CRYOSPARC_CACHE_FREE:-5000}"
+  SSD_OPTS="--ssdpath ${CRYOSPARC_CACHE_DIR} --ssdquota ${CRYOSPARC_CACHE_QUOTA:-2500000} --ssdreserve ${CRYOSPARC_CACHE_FREE:-5000}"
   if [ ! -z $CRYOSPARC_WORKER_NOSSD ]; then
-    SSD_OPTS="--nossd"
+    SSD_OPTS=""
   fi
-  ${CRYOSPARC_WORKER_DIR}/bin/cryosparcw connect --worker ${CRYOSPARC_MASTER_HOSTNAME} --master ${CRYOSPARC_MASTER_HOSTNAME} --port ${CRYOSPARC_BASE_PORT} ${SSD_OPTS} ${NOGPU}
-
-  echo "Success starting cryosparc worker"
+  if cryosparcm worker connect --path ${CRYOSPARC_WORKER_DIR} \
+                              --worker ${CRYOSPARC_MASTER_HOSTNAME} \
+                              ${SSD_OPTS} ${GPU_OPT}; then
+    echo "Success starting cryosparc worker"
+  else
+    echo "####################################################################"
+    echo "ERROR: could not register the local CryoSPARC worker. Jobs cannot be"
+    echo "       queued to this session. See the error above."
+    echo "####################################################################"
+  fi
 fi
 
 ###
@@ -132,8 +230,8 @@ fi
 ###
 # create firefox startup
 ###
-export CRYOSPARC_BASE_PORT=$(cat $HOME/cryosparc/config.sh | awk '/CRYOSPARC_BASE_PORT/{ split($2,a,"="); print a[2] }')
+export CRYOSPARC_BASE_PORT=$(cat ${CRYOSPARC_DATADIR}/config.sh | awk '/CRYOSPARC_BASE_PORT/{ split($2,a,"="); print a[2] }')
 echo "/usr/bin/firefox http://localhost:${CRYOSPARC_BASE_PORT}" > ${LSCRATCH}/cryosparc_launcher.sh
-cp /cryosparc.desktop ${HOME}/Desktop/cryosparc.desktop 
+cp /cryosparc.desktop ${HOME}/Desktop/cryosparc.desktop
 chmod +x ${HOME}/Desktop/cryosparc.desktop
 ln -sfn ${LSCRATCH}/cryosparc_launcher.sh "${HOME}/Desktop/cryosparc_launcher.sh"

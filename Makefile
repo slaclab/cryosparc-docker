@@ -1,4 +1,4 @@
-CRYOSPARC_VERSION ?= 4.6.2
+CRYOSPARC_VERSION ?= 5.0.7
 CRYOSPARC_PATCH ?= 
 CRYOSPARC_RELEASE ?= 0
 CONTAINER_RUNTIME ?= podman
@@ -24,11 +24,6 @@ else
 	@echo ${CRYOSPARC_LICENSE_ID} > etc/.secrets/cryosparc_license_id.txt
 endif
 	
-ifeq ($(MOTIONCOR2_LICENSE_ID),)
-	echo "MOTIONCOR2_LICENSE_ID cannot be blank"
-else
-	@echo ${MOTIONCOR2_LICENSE_ID} > etc/.secrets/motioncor2_license_id.txt
-endif
 
 clean-license:
 	rm -rf etc/.secrets
@@ -39,7 +34,6 @@ build: tag
 		--build-arg CRYOSPARC_PATCH=${CRYOSPARC_PATCH} \
 		--progress=plain \
 		--secret id=cryosparc_license_id,src=etc/.secrets/cryosparc_license_id.txt \
-	    --secret id=motioncor2_license_id,src=etc/.secrets/motioncor2_license_id.txt \
 		. -f Dockerfile.desktop \
 	-t $(IMAGE):${TAG}
 

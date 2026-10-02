@@ -4,8 +4,8 @@ FROM slaclab/x11-desktop:20231115.0
 ENV DEBIAN_FRONTEND noninteractive
 
 COPY mozilla.pin /etc/apt/preferences.d/mozilla 
-RUN curl -fsSL https://www.mongodb.org/static/pgp/server-6.0.asc | gpg --dearmor -o /usr/share/keyrings/mongodb-6.0-keyring.gpg \
-  && echo "deb [ arch=amd64,arch64 signed-by=/usr/share/keyrings/mongodb-6.0-keyring.gpg ] https://repo.mongodb.org/apt/ubuntu jammy/mongodb-org/6.0 multiverse" | tee /etc/apt/sources.list.d/mongodb-org-6.0.list \
+RUN curl -fsSL https://www.mongodb.org/static/pgp/server-8.0.asc | gpg --dearmor -o /usr/share/keyrings/mongodb-8.0-keyring.gpg \
+  && echo "deb [ arch=amd64,arch64 signed-by=/usr/share/keyrings/mongodb-8.0-keyring.gpg ] https://repo.mongodb.org/apt/ubuntu jammy/mongodb-org/8.0 multiverse" | tee /etc/apt/sources.list.d/mongodb-org-8.0.list \
   && apt-get update -y \
   && wget -q https://packages.mozilla.org/apt/repo-signing-key.gpg -O /usr/share/keyrings/packages.mozilla.org.asc \
   && echo "deb [ arch=amd64 signed-by=/usr/share/keyrings/packages.mozilla.org.asc ] https://packages.mozilla.org/apt mozilla main" > /etc/apt/sources.list.d/mozilla.list \
@@ -43,17 +43,25 @@ ENV CRYOSPARC_MASTER_DIR ${CRYOSPARC_ROOT_DIR}/cryosparc_master
 RUN --mount=type=secret,id=cryosparc_license_id \
   curl -L https://get.cryosparc.com/download/master-v${CRYOSPARC_VERSION}/$(cat /run/secrets/cryosparc_license_id) | tar -xz \
   && cd ${CRYOSPARC_MASTER_DIR} \
-  && sed -i '/^# Other$/ a echo \"CRYOSPARC_FORCE_USER=true\" >> config.sh' ${CRYOSPARC_MASTER_DIR}/install.sh \
-  && bash ./install.sh --license "$(cat /run/secrets/cryosparc_license_id)" --allowroot --yes  \
-  && sed -i 's/^export CRYOSPARC_LICENSE_ID=.*$/export CRYOSPARC_LICENSE_ID=TBD/g' ${CRYOSPARC_MASTER_DIR}/config.sh
+  && bash ./install.sh --license "$(cat /run/secrets/cryosparc_license_id)" \
+       --hostname localhost \
+       --dbpath ${CRYOSPARC_ROOT_DIR}/cryosparc_database \
+       --port 61000 \
+       --allowroot --yes \
+  && sed -i 's/^export CRYOSPARC_LICENSE_ID=.*$/export CRYOSPARC_LICENSE_ID=TBD/g' ${CRYOSPARC_MASTER_DIR}/config.sh \
+  && echo 'export CRYOSPARC_FORCE_USER=true' >> ${CRYOSPARC_MASTER_DIR}/config.sh
 
 # update patches
 RUN if [ "" != "${CRYOSPARC_PATCH}" ]; then wget https://get.cryosparc.com/patch_get/v${CRYOSPARC_VERSION}+${CRYOSPARC_PATCH}/master -O ${CRYOSPARC_ROOT_DIR}/cryosparc_master_patch.tar.gz \
   && tar -vxzf ${CRYOSPARC_ROOT_DIR}/cryosparc_master_patch.tar.gz --overwrite --strip-components=1 --directory=${CRYOSPARC_MASTER_DIR} \
   && rm -f ${CRYOSPARC_ROOT_DIR}/cryosparc_master_patch.tar.gz; fi
 
-# patches
-RUN sed -i 's:    disk_has_space=.*:    disk_has_space="true":g'  ${CRYOSPARC_MASTER_DIR}/bin/cryosparcm
+# Verified against v5.0.7: bin/cryosparcm no longer contains the "disk_has_space"
+# free-space check that v4 had and that we used to patch out, so no patch is
+# needed. Left as a grep so a reintroduced check shows up in the build log.
+RUN grep -rn 'disk_has_space' ${CRYOSPARC_MASTER_DIR}/bin/ \
+      && echo "DISK_PATCH: WARNING - a free-space check is back; it may block startup on /sdf" \
+      || echo "DISK_PATCH: no free-space check present (expected for v5)"
 
 # install worker
 ENV CRYOSPARC_WORKER_DIR ${CRYOSPARC_ROOT_DIR}/cryosparc_worker
@@ -61,7 +69,8 @@ RUN --mount=type=secret,id=cryosparc_license_id \
   curl -L https://get.cryosparc.com/download/worker-v${CRYOSPARC_VERSION}/$(cat /run/secrets/cryosparc_license_id) | tar -xz \
   && cd ${CRYOSPARC_WORKER_DIR} \
   && bash ./install.sh --license "$(cat /run/secrets/cryosparc_license_id)" --yes \
-  && sed -i 's/^export CRYOSPARC_LICENSE_ID=.*$/export CRYOSPARC_LICENSE_ID=TBD/g' ${CRYOSPARC_WORKER_DIR}/config.sh
+  && sed -i 's/^export CRYOSPARC_LICENSE_ID=.*$/export CRYOSPARC_LICENSE_ID=TBD/g' ${CRYOSPARC_WORKER_DIR}/config.sh \
+  && echo 'export CRYOSPARC_FORCE_USER=true' >> ${CRYOSPARC_WORKER_DIR}/config.sh
 
 # update patches
 RUN if [ ! -z "${CRYOSPARC_PATCH}" ]; then wget https://get.cryosparc.com/patch_get/v${CRYOSPARC_VERSION}+${CRYOSPARC_PATCH}/worker -O ${CRYOSPARC_ROOT_DIR}/cryosparc_worker_patch.tar.gz \
@@ -69,19 +78,29 @@ RUN if [ ! -z "${CRYOSPARC_PATCH}" ]; then wget https://get.cryosparc.com/patch_
   && rm -f ${CRYOSPARC_ROOT_DIR}/cryosparc_worker_patch.tar.gz; fi
 
 # compile libtiff
-RUN ${CRYOSPARC_MASTER_DIR}/deps/anaconda/envs/cryosparc_master_env/bin/python3 ${CRYOSPARC_MASTER_DIR}/cryosparc_compute/blobio/tiff.py \
-  && ${CRYOSPARC_WORKER_DIR}/deps/anaconda/envs/cryosparc_worker_env/bin/python3 ${CRYOSPARC_WORKER_DIR}/cryosparc_compute/blobio/tiff.py
+# v5 replaced the Anaconda layout with a conda-packed env under .pixi/envs/<mode>
+# (install_python.sh explicitly deletes deps/anaconda as a "legacy folder name"),
+# and cryosparc_compute/ is now compute/.
+RUN set -e; \
+  for pair in "${CRYOSPARC_MASTER_DIR}:master" "${CRYOSPARC_WORKER_DIR}:worker"; do \
+    root="${pair%%:*}"; mode="${pair##*:}"; \
+    py="${root}/.pixi/envs/${mode}/bin/python3"; \
+    src="${root}/compute/blobio/tiff.py"; \
+    test -x "${py}" || (echo "ERROR: python env missing at ${py}" && exit 1); \
+    test -f "${src}" || (echo "ERROR: ${src} missing" && exit 1); \
+    "${py}" "${src}" && echo "TIFF_PATCH: compiled for ${mode}"; \
+  done
+
 ####
 ## install motioncor
 ####
 ARG MOTIONCOR2_VERSION=1.4.5
 ENV MOTIONCOR2_VERSION=${MOTIONCOR2_VERSION}
 ENV CUDA_TOOLKIT_VERSION="Cuda100-10-22-2021"
-RUN --mount=type=secret,id=motioncor2_license_id \
-  cd /usr/local/bin \
-  && curl -L "https://drive.google.com/uc?export=download&id=$(cat /run/secrets/motioncor2_license_id)" > MotionCor2_${MOTIONCOR2_VERSION}.zip \
-  && unzip MotionCor2_${MOTIONCOR2_VERSION}.zip \
-  && rm -f MotionCor2_${MOTIONCOR2_VERSION}.zip \
+COPY etc/motioncor2/ /usr/local/bin/
+RUN cd /usr/local/bin \
+  && test -x "MotionCor2_${MOTIONCOR2_VERSION}_${CUDA_TOOLKIT_VERSION}" \
+    || (echo "ERROR: MotionCor2_${MOTIONCOR2_VERSION}_${CUDA_TOOLKIT_VERSION} not found in etc/motioncor2/; available:" && ls -1 MotionCor2_* && exit 1) \
   && ln -sf MotionCor2_${MOTIONCOR2_VERSION}_${CUDA_TOOLKIT_VERSION} MotionCor2
 
 ###
@@ -89,17 +108,30 @@ RUN --mount=type=secret,id=motioncor2_license_id \
 ###
 ARG TOPAZ_VERSION=0.2.5
 ENV TOPAZ_VERSION=${TOPAZ_VERSION}
-ENV TOPAZ_CUDA_TOOLKIT_VERSION=12.2.0
-RUN ${CRYOSPARC_WORKER_DIR}/deps/anaconda/bin/conda install -y topaz=${TOPAZ_VERSION} cuda-libraries-dev cuda-nvcc cuda-nvtx cuda-cupti -c nvidia/label/cuda-${TOPAZ_CUDA_TOOLKIT_VERSION} -c tbepler -c pytorch
-RUN ${CRYOSPARC_WORKER_DIR}/deps/anaconda/bin/conda create -n topaz python=3.6
-COPY topaz.sh ${CRYOSPARC_WORKER_DIR}/deps/anaconda/bin/topaz.sh
+ARG TOPAZ_MKL_VERSION=2024.0.0
+ENV TOPAZ_MKL_VERSION=${TOPAZ_MKL_VERSION}
+ENV TOPAZ_PREFIX=/opt/topaz
+RUN curl -Ls https://micro.mamba.pm/api/micromamba/linux-64/latest \
+      | tar -xj -C /usr/local bin/micromamba \
+  && /usr/local/bin/micromamba create -y -p ${TOPAZ_PREFIX} \
+       -c tbepler -c pytorch -c conda-forge \
+       topaz=${TOPAZ_VERSION} mkl=${TOPAZ_MKL_VERSION} \
+  && /usr/local/bin/micromamba clean -a -y \
+  && ${TOPAZ_PREFIX}/bin/topaz --version \
+  && echo "TOPAZ_MKL: $(ls -d ${TOPAZ_PREFIX}/conda-meta/mkl-* 2>/dev/null || echo MISSING)"
+COPY topaz.sh /usr/local/bin/topaz.sh
+RUN chmod +x /usr/local/bin/topaz.sh
 
 ###
 # set up idle culler
 ###
 COPY cryosparc_idle_culler.sh /usr/local/bin/cryosparc_idle_culler.sh
+COPY cryosparc_db_migrate.sh /usr/local/bin/cryosparc_db_migrate.sh
+RUN chmod +x /usr/local/bin/cryosparc_db_migrate.sh /usr/local/bin/cryosparc_idle_culler.sh
 RUN --mount=type=bind,source=supervisord.conf,target=/tmp/supervisord.conf \
-    cat /tmp/supervisord.conf >> /app/cryosparc_master/supervisord.conf
+    test -f /app/cryosparc_master/config/supervisord.conf \
+      || (echo "ERROR: config/supervisord.conf missing; v5 layout changed again. The idle culler must be re-homed before release." && exit 1) \
+    && cat /tmp/supervisord.conf >> /app/cryosparc_master/config/supervisord.conf
 
 ###
 #
@@ -107,16 +139,29 @@ RUN --mount=type=bind,source=supervisord.conf,target=/tmp/supervisord.conf \
 COPY entrypoint.bash /entrypoint.bash
 COPY cryosparc.sh /cryosparc.sh
 COPY cryosparc-server.sh ${CRYOSPARC_MASTER_DIR}/bin/cryosparc-server.sh
+# COPY preserves the source mode, so a checkout missing the exec bit produces an
+# image where Open OnDemand's `singularity exec ... /cryosparc.sh` fails with
+# "command not found". Observed on a locally built 4.6.2 image. Set it here so
+# the image does not depend on the checkout's file modes.
+RUN chmod +x /entrypoint.bash /cryosparc.sh ${CRYOSPARC_MASTER_DIR}/bin/cryosparc-server.sh
 
 # autostart stuff
+ADD slurm /app/slurm
+
 COPY cryosparc.desktop /cryosparc.desktop
 RUN rm -f /etc/xdg/autostart/xscreensaver.desktop /etc/xdg/autostart/blueman.desktop /etc/xdg/autostart/mate-screensaver.desktop /etc/xdg/autostart/print-applet.desktop /etc/xdg/autostart/xfce4-power-manager.desktop /etc/xdg/autostart/mate-power-manager.desktop
 
-EXPOSE 39000
-EXPOSE 39001
-EXPOSE 39002
-EXPOSE 39003
-EXPOSE 39004
-EXPOSE 39006
+# v5 derives service ports at base+0..+9, and rejects any base port inside the
+# Linux ephemeral range (32768-60999), so the base moved 39000 -> 61000.
+EXPOSE 61000
+EXPOSE 61001
+EXPOSE 61002
+EXPOSE 61003
+EXPOSE 61004
+EXPOSE 61005
+EXPOSE 61006
+EXPOSE 61007
+EXPOSE 61008
+EXPOSE 61009
 
 ENTRYPOINT /entrypoint.bash
