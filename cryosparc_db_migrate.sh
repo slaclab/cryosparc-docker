@@ -93,24 +93,62 @@ case "$(get_state)" in
         ;;
 esac
 
-# An existing, non-empty v5 database with no state file means this instance was
-# created directly by v5 (or already carries data we did not put there).
-# Upgrading it would be wrong, and clobbering it would be worse.
+# Resolve a path for comparison. readlink -f handles a path that does not exist
+# yet, which the v5 directory may not on a first launch.
+canonical() { readlink -f "$1" 2>/dev/null || printf '%s' "$1"; }
+
+# Guard: the two directories must not be the same one. The whole safety model is
+# that the v4 database is copied and left untouched, so that a v4 session stays
+# possible; migrating a directory onto itself would destroy that and could
+# corrupt the database outright.
+if [ -n "${V4_DATADIR}" ] && [ "$(canonical "${V5_DATADIR}")" = "$(canonical "${V4_DATADIR}")" ]; then
+    fail "'CryoSPARC Datadir' and 'Migrate database from' are the same directory:
+  ${V5_DATADIR}
+
+They must be different. 'CryoSPARC Datadir' needs to be a NEW directory for the
+v5 instance; 'Migrate database from' is your existing v4 directory, which is only
+ever read. Nothing has been changed."
+    exit 1
+fi
+
+# Guard: the v5 directory already holds a database that this script never
+# created. Most likely the user pointed 'CryoSPARC Datadir' at their existing v4
+# directory. We cannot tell a v4 database from a v5 one without starting it, and
+# running v5 against un-upgraded v4 data risks corrupting it -- which is exactly
+# what the CryoSPARC guide warns against -- so refuse rather than guess.
 if [ -d "${V5_DBPATH}" ] && [ -n "$(ls -A "${V5_DBPATH}" 2>/dev/null)" ]; then
-    log "v5 database at ${V5_DBPATH} already exists and is not empty."
-    log "Assuming it is a native v5 database; skipping migration."
-    set_state "done"
-    exit 0
+    fail "'CryoSPARC Datadir' already contains a CryoSPARC database that was not
+created by this v5 setup:
+  ${V5_DBPATH}
+
+If that is your existing CryoSPARC v4 directory, this is not where it goes:
+  * put a NEW, empty directory in 'CryoSPARC Datadir'
+  * put this path in 'Migrate database from'
+and your v4 database will be copied there and upgraded, leaving the original
+untouched.
+
+Nothing has been changed."
+    exit 1
+fi
+
+# Guard: a migration source was given but does not look like a CryoSPARC data
+# directory. Starting an empty instance here would look like the migration had
+# silently lost the user's projects, so treat a typo as an error.
+if [ -n "${V4_DATADIR}" ] && { [ ! -d "${V4_DBPATH}" ] || [ -z "$(ls -A "${V4_DBPATH}" 2>/dev/null)" ]; }; then
+    fail "'Migrate database from' does not contain a CryoSPARC database:
+  ${V4_DATADIR}
+
+Expected to find a non-empty '${V4_DBPATH##*/}' directory inside it. Check the
+path - it should be the directory that holds cryosparc_database, not the
+database directory itself, and not a project directory.
+
+To start a brand new, empty CryoSPARC v5 instance instead, clear the
+'Migrate database from' field. Nothing has been changed."
+    exit 1
 fi
 
 if [ -z "${V4_DATADIR}" ]; then
-    log "CRYOSPARC_MIGRATE_FROM is unset; starting a fresh v5 instance."
-    set_state "done"
-    exit 0
-fi
-
-if [ ! -d "${V4_DBPATH}" ] || [ -z "$(ls -A "${V4_DBPATH}" 2>/dev/null)" ]; then
-    log "No v4 database found at ${V4_DBPATH}; starting a fresh v5 instance."
+    log "No migration source given; starting a fresh v5 instance."
     set_state "done"
     exit 0
 fi
