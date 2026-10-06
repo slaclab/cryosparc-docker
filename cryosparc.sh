@@ -17,15 +17,23 @@ export LSCRATCH=${LSCRATCH:-/lscratch/$USER}
 ###
 # Where the user's desktop actually is.
 #
-# xfce shows $XDG_DESKTOP_DIR, and the Open OnDemand desktop script sets that to
-# $LSCRATCH/Desktop -- NOT $HOME/Desktop. This script runs from after.sh, which
-# is a sibling of the desktop's script.sh and so does not inherit that export,
-# so resolve it here. Writing to $HOME/Desktop put the CryoSPARC launcher icon
-# and our status notices somewhere the user never sees.
+# Ask xdg-user-dir, because that performs the same lookup the desktop itself
+# does: it reads ~/.config/user-dirs.dirs. Exporting XDG_DESKTOP_DIR (as the
+# Open OnDemand xfce script does) has NO effect on xfdesktop, so trusting that
+# variable put our launcher in a directory nobody was looking at.
+#
+# On S3DF user-dirs.dirs currently reads XDG_DESKTOP_DIR="$HOME/", i.e. the
+# desktop surface is the home directory itself, so that is where the launcher
+# has to go to be visible. The remaining candidates are fallbacks for sessions
+# without xdg-user-dir or without that config.
 ###
 resolve_desktop_dir() {
   local candidate
-  for candidate in "${XDG_DESKTOP_DIR}" "${LSCRATCH:+${LSCRATCH}/Desktop}" "${HOME}/Desktop"; do
+  for candidate in "$(xdg-user-dir DESKTOP 2>/dev/null)" \
+                   "${XDG_DESKTOP_DIR}" \
+                   "${LSCRATCH:+${LSCRATCH}/Desktop}" \
+                   "${HOME}/Desktop"; do
+    candidate=${candidate%/}
     [ -n "${candidate}" ] || continue
     if mkdir -p "${candidate}" 2>/dev/null && [ -w "${candidate}" ]; then
       printf '%s' "${candidate}"
@@ -243,11 +251,25 @@ fi
 # create firefox startup
 ###
 export CRYOSPARC_BASE_PORT=$(cat ${CRYOSPARC_DATADIR}/config.sh | awk '/CRYOSPARC_BASE_PORT/{ split($2,a,"="); print a[2] }')
-echo "/usr/bin/firefox http://localhost:${CRYOSPARC_BASE_PORT}" > ${LSCRATCH}/cryosparc_launcher.sh
+
+# Put the URL straight into the desktop entry's Exec line.
+#
+# This used to write a helper script to $LSCRATCH and symlink it onto the
+# desktop, with the entry running "Exec=bash cryosparc_launcher.sh". That could
+# never work: desktop entries are not launched with the desktop folder as their
+# working directory, so the relative filename resolved to nothing -- and the
+# helper script was never made executable either. Substituting the port into an
+# absolute Exec removes both faults and leaves a single file on the desktop.
 if [ -n "${CRYOSPARC_DESKTOP_DIR}" ]; then
-  cp /cryosparc.desktop "${CRYOSPARC_DESKTOP_DIR}/cryosparc.desktop"
+  sed "s|__BASE_PORT__|${CRYOSPARC_BASE_PORT}|g" /cryosparc.desktop \
+    > "${CRYOSPARC_DESKTOP_DIR}/cryosparc.desktop"
   chmod +x "${CRYOSPARC_DESKTOP_DIR}/cryosparc.desktop"
-  ln -sfn ${LSCRATCH}/cryosparc_launcher.sh "${CRYOSPARC_DESKTOP_DIR}/cryosparc_launcher.sh"
+  # Remove the artefacts of the old scheme, both from the directory we now use
+  # and from $HOME/Desktop, where earlier versions wrote them. Only our own
+  # files are touched; the directory itself is left alone.
+  for stale in "${CRYOSPARC_DESKTOP_DIR}" "${HOME}/Desktop"; do
+    rm -f "${stale}/cryosparc_launcher.sh" "${stale}/CRYOSPARC-MIGRATION.txt" 2>/dev/null || true
+  done
 else
   echo "WARNING: no writable desktop directory; the CryoSPARC launcher icon was not created."
   echo "WARNING: open http://localhost:${CRYOSPARC_BASE_PORT} in the browser instead."

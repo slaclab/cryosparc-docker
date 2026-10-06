@@ -1,6 +1,8 @@
 [Desktop Entry]
 Type=Application
-Exec=bash cryosparc_launcher.sh
-Hidden=false
-X-GNOME-Autostart-enabled=true
 Name=CryoSPARC Web App
+Comment=Open the CryoSPARC web interface in Firefox
+Exec=/usr/bin/firefox http://localhost:__BASE_PORT__
+Icon=firefox
+Terminal=false
+Categories=Science;Education;
