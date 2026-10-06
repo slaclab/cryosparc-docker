@@ -31,7 +31,11 @@ V4_DBPATH="${V4_DATADIR}/cryosparc_database"
 STATE_FILE="${V5_DATADIR}/.cryosparc_v5_migration"
 LOG_DIR="${V5_DATADIR}/run"
 LOG_FILE="${LOG_DIR}/v5_migration_$(date +%Y%m%d_%H%M%S).log"
-NOTICE="${HOME}/Desktop/CRYOSPARC-MIGRATION.txt"
+# xfce displays $XDG_DESKTOP_DIR, which Open OnDemand sets to $LSCRATCH/Desktop
+# rather than $HOME/Desktop. cryosparc.sh resolves and exports the real location;
+# fall back for standalone/admin runs of this script.
+DESKTOP_DIR=${CRYOSPARC_DESKTOP_DIR:-${LSCRATCH:+${LSCRATCH}/Desktop}}
+NOTICE="${DESKTOP_DIR:-${HOME}/Desktop}/CRYOSPARC-MIGRATION.txt"
 
 mkdir -p "${LOG_DIR}"
 
