@@ -31,11 +31,6 @@ V4_DBPATH="${V4_DATADIR}/cryosparc_database"
 STATE_FILE="${V5_DATADIR}/.cryosparc_v5_migration"
 LOG_DIR="${V5_DATADIR}/run"
 LOG_FILE="${LOG_DIR}/v5_migration_$(date +%Y%m%d_%H%M%S).log"
-# xfce displays $XDG_DESKTOP_DIR, which Open OnDemand sets to $LSCRATCH/Desktop
-# rather than $HOME/Desktop. cryosparc.sh resolves and exports the real location;
-# fall back for standalone/admin runs of this script.
-DESKTOP_DIR=${CRYOSPARC_DESKTOP_DIR:-${LSCRATCH:+${LSCRATCH}/Desktop}}
-NOTICE="${DESKTOP_DIR:-${HOME}/Desktop}/CRYOSPARC-MIGRATION.txt"
 
 # Be usable standalone (e.g. run by an administrator) and not only via
 # cryosparc.sh, which is what normally puts cryosparcm on PATH. Without this the
@@ -55,34 +50,21 @@ mkdir -p "${LOG_DIR}"
 
 log() { echo "$(date +'%Y-%m-%d %H:%M:%S') [migrate] $*" | tee -a "${LOG_FILE}"; }
 
-# Leave a breadcrumb on the desktop so a user staring at an empty session knows
-# what is happening; the desktop is the only UI they have during migration. Fall
-# back to the data directory when there is no usable Desktop (non-desktop runs,
-# or HOME pointing somewhere unwritable).
-notify() {
-    if mkdir -p "$(dirname "${NOTICE}")" 2>/dev/null \
-       && printf '%s\n' "$*" > "${NOTICE}" 2>/dev/null; then
-        return
-    fi
-    printf '%s\n' "$*" > "${V5_DATADIR}/CRYOSPARC-MIGRATION.txt" 2>/dev/null || true
-}
-
 set_state() { echo "$1" > "${STATE_FILE}"; }
 get_state() { [ -f "${STATE_FILE}" ] && cat "${STATE_FILE}" || echo "none"; }
 
+# Record the failure and stop. There is deliberately no desktop notice: Open
+# OnDemand withholds the session's Launch button until this script has finished,
+# so anything written to the desktop during migration is unreadable by the time
+# the user can get to it. log() writes to both the migration log and stdout, and
+# stdout lands in the session's output file, so the full message is preserved in
+# two places the user can actually reach.
 fail() {
     log "MIGRATION FAILED: $*"
+    log "Your original v4 database was not modified and is still at ${V4_DBPATH}."
+    log "You can keep working by starting a CryoSPARC v4.7 session."
+    log "Please send ${LOG_FILE} to the cryo-EM support team."
     set_state "failed"
-    notify "CryoSPARC v5 database migration FAILED
-
-$*
-
-Your original v4 database was not modified and is still at:
-  ${V4_DBPATH}
-
-You can keep working by starting a CryoSPARC v4.7 session.
-Please send this log to the cryo-EM support team:
-  ${LOG_FILE}"
     return 1
 }
 
@@ -97,7 +79,6 @@ free_space_mb() { df -Pm "$1" 2>/dev/null | awk 'NR==2 {print $4}'; }
 case "$(get_state)" in
     done)
         log "Database already migrated to v5; nothing to do."
-        rm -f "${NOTICE}"
         exit 0
         ;;
     seeded)
@@ -196,13 +177,6 @@ fi
 log "Preparing to migrate CryoSPARC v4 database to v5."
 log "  source (v4, read-only): ${V4_DBPATH}"
 log "  target (v5):            ${V5_DBPATH}"
-notify "CryoSPARC is upgrading your database to v5.
-
-This runs once and can take anywhere from a few minutes to over an hour,
-depending on how many projects and jobs you have. Please do not close this
-session until CryoSPARC opens.
-
-Progress log: ${LOG_FILE}"
 
 # Copying a WiredTiger directory while mongod is actively writing to it yields a
 # torn copy. mongod.lock holds a PID while the database is running and is
@@ -440,10 +414,4 @@ done
 
 set_state "done"
 log "Migration finished successfully."
-notify "CryoSPARC v5 database migration completed successfully.
-
-Your original v4 database is still at ${V4_DBPATH} and was not modified.
-Once you are satisfied that v5 works, you may delete it to reclaim space.
-
-Log: ${LOG_FILE}"
 exit 0
