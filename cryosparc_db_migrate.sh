@@ -31,7 +31,25 @@ V4_DBPATH="${V4_DATADIR}/cryosparc_database"
 STATE_FILE="${V5_DATADIR}/.cryosparc_v5_migration"
 LOG_DIR="${V5_DATADIR}/run"
 LOG_FILE="${LOG_DIR}/v5_migration_$(date +%Y%m%d_%H%M%S).log"
-NOTICE="${HOME}/Desktop/CRYOSPARC-MIGRATION.txt"
+# xfce displays $XDG_DESKTOP_DIR, which Open OnDemand sets to $LSCRATCH/Desktop
+# rather than $HOME/Desktop. cryosparc.sh resolves and exports the real location;
+# fall back for standalone/admin runs of this script.
+DESKTOP_DIR=${CRYOSPARC_DESKTOP_DIR:-${LSCRATCH:+${LSCRATCH}/Desktop}}
+NOTICE="${DESKTOP_DIR:-${HOME}/Desktop}/CRYOSPARC-MIGRATION.txt"
+
+# Be usable standalone (e.g. run by an administrator) and not only via
+# cryosparc.sh, which is what normally puts cryosparcm on PATH. Without this the
+# script fails late with a bare "cryosparcm: command not found".
+case ":${PATH}:" in
+    *":${CRYOSPARC_MASTER_DIR}/bin:"*) ;;
+    *) PATH="${CRYOSPARC_MASTER_DIR}/bin:${PATH}"; export PATH ;;
+esac
+
+case "${V5_DATADIR}" in
+    /*) ;;
+    *)  echo "CRYOSPARC_DATADIR must be an absolute path; got '${V5_DATADIR}'" >&2
+        exit 1 ;;
+esac
 
 mkdir -p "${LOG_DIR}"
 
@@ -82,6 +100,20 @@ case "$(get_state)" in
         rm -f "${NOTICE}"
         exit 0
         ;;
+    seeded)
+        # The database was copied but the upgrade never completed -- the session
+        # was killed, the node failed, or Slurm timed out partway through. The
+        # copy is disposable and the v4 original was never written to, so discard
+        # the half-migrated copy and start again. Without this the next launch
+        # falls through to the guard below and misreports the interrupted copy as
+        # "a database not created by this v5 setup", which is both wrong and
+        # impossible for a user to act on.
+        log "A previous migration was interrupted after copying the database but"
+        log "before the upgrade finished. Discarding the incomplete copy and"
+        log "starting over; your v4 database was never modified."
+        rm -rf "${V5_DBPATH}"
+        rm -f "${STATE_FILE}"
+        ;;
     failed)
         log "A previous migration attempt failed; refusing to start CryoSPARC."
         log "Inspect ${V5_DATADIR} and remove ${STATE_FILE} to retry."
@@ -89,24 +121,71 @@ case "$(get_state)" in
         ;;
 esac
 
-# An existing, non-empty v5 database with no state file means this instance was
-# created directly by v5 (or already carries data we did not put there).
-# Upgrading it would be wrong, and clobbering it would be worse.
+# Resolve a path for comparison. readlink -f handles a path that does not exist
+# yet, which the v5 directory may not on a first launch.
+canonical() { readlink -f "$1" 2>/dev/null || printf '%s' "$1"; }
+
+# Guard: the two directories must not be the same one. The whole safety model is
+# that the v4 database is copied and left untouched, so that a v4 session stays
+# possible; migrating a directory onto itself would destroy that and could
+# corrupt the database outright.
+if [ -n "${V4_DATADIR}" ] && [ "$(canonical "${V5_DATADIR}")" = "$(canonical "${V4_DATADIR}")" ]; then
+    fail "'CryoSPARC Datadir' and 'Migrate database from' are the same directory:
+  ${V5_DATADIR}
+
+They must be different. 'CryoSPARC Datadir' needs to be a NEW directory for the
+v5 instance; 'Migrate database from' is your existing v4 directory, which is only
+ever read. Nothing has been changed."
+    exit 1
+fi
+
+# Guard: a database exists here that we have no record of creating.
+#
+# This does NOT inspect the database. It tests "non-empty cryosparc_database AND
+# no completed-migration marker" -- the `done` and `seeded` states above have
+# already returned or reset by this point, so reaching here means this script has
+# never finished a migration into this directory. Telling a v4 database from a v5
+# one for real would mean starting mongod and reading `running_version` from the
+# config collection; we deliberately do not, because running v5 against
+# un-upgraded v4 data is the specific thing the CryoSPARC guide warns against.
+#
+# The trade-off: a genuine v5 database that this script did not create (a
+# restored backup, a copied datadir, a hand-run instance) is also refused. That
+# is the safe direction, and such a database would fail the no-op check later
+# anyway with "database upgrade is not required for this version".
 if [ -d "${V5_DBPATH}" ] && [ -n "$(ls -A "${V5_DBPATH}" 2>/dev/null)" ]; then
-    log "v5 database at ${V5_DBPATH} already exists and is not empty."
-    log "Assuming it is a native v5 database; skipping migration."
-    set_state "done"
-    exit 0
+    fail "'CryoSPARC Datadir' already contains a CryoSPARC database that was not
+created by this v5 setup:
+  ${V5_DBPATH}
+
+If that is your existing CryoSPARC v4 directory, this is not where it goes:
+  * put a NEW, empty directory in 'CryoSPARC Datadir'
+  * put this path in 'Migrate database from'
+and your v4 database will be copied there and upgraded, leaving the original
+untouched.
+
+Nothing has been changed."
+    exit 1
+fi
+
+# Guard: a migration source was given but does not look like a CryoSPARC data
+# directory. Starting an empty instance here would look like the migration had
+# silently lost the user's projects, so treat a typo as an error.
+if [ -n "${V4_DATADIR}" ] && { [ ! -d "${V4_DBPATH}" ] || [ -z "$(ls -A "${V4_DBPATH}" 2>/dev/null)" ]; }; then
+    fail "'Migrate database from' does not contain a CryoSPARC database:
+  ${V4_DATADIR}
+
+Expected to find a non-empty '${V4_DBPATH##*/}' directory inside it. Check the
+path - it should be the directory that holds cryosparc_database, not the
+database directory itself, and not a project directory.
+
+To start a brand new, empty CryoSPARC v5 instance instead, clear the
+'Migrate database from' field. Nothing has been changed."
+    exit 1
 fi
 
 if [ -z "${V4_DATADIR}" ]; then
-    log "CRYOSPARC_MIGRATE_FROM is unset; starting a fresh v5 instance."
-    set_state "done"
-    exit 0
-fi
-
-if [ ! -d "${V4_DBPATH}" ] || [ -z "$(ls -A "${V4_DBPATH}" 2>/dev/null)" ]; then
-    log "No v4 database found at ${V4_DBPATH}; starting a fresh v5 instance."
+    log "No migration source given; starting a fresh v5 instance."
     set_state "done"
     exit 0
 fi

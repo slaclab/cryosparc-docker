@@ -15,6 +15,29 @@ export HOME=${HOME:-$USER_HOMEDIR}
 export LSCRATCH=${LSCRATCH:-/lscratch/$USER}
 
 ###
+# Where the user's desktop actually is.
+#
+# xfce shows $XDG_DESKTOP_DIR, and the Open OnDemand desktop script sets that to
+# $LSCRATCH/Desktop -- NOT $HOME/Desktop. This script runs from after.sh, which
+# is a sibling of the desktop's script.sh and so does not inherit that export,
+# so resolve it here. Writing to $HOME/Desktop put the CryoSPARC launcher icon
+# and our status notices somewhere the user never sees.
+###
+resolve_desktop_dir() {
+  local candidate
+  for candidate in "${XDG_DESKTOP_DIR}" "${LSCRATCH:+${LSCRATCH}/Desktop}" "${HOME}/Desktop"; do
+    [ -n "${candidate}" ] || continue
+    if mkdir -p "${candidate}" 2>/dev/null && [ -w "${candidate}" ]; then
+      printf '%s' "${candidate}"
+      return 0
+    fi
+  done
+  return 1
+}
+export CRYOSPARC_DESKTOP_DIR=$(resolve_desktop_dir)
+echo "CRYOSPARC_DESKTOP_DIR=${CRYOSPARC_DESKTOP_DIR:-<none writable>}"
+
+###
 # master initialization
 ###
 export CRYOSPARC_MASTER_HOSTNAME=${CRYOSPARC_MASTER_HOSTNAME:-localhost}
@@ -118,7 +141,6 @@ else
   cryosparcm status 2>&1 | sed -n '/process status/,/^───/p' || true
   echo "       Logs: ${CRYOSPARC_DATADIR}/run/{database,api,command_vis}.log"
   echo "########################################################################"
-  mkdir -p "${HOME}/Desktop" 2>/dev/null || true
   {
     echo "CryoSPARC failed to start."
     echo
@@ -127,7 +149,7 @@ else
     echo "  ${CRYOSPARC_DATADIR}/run/api.log"
     echo
     echo "Please send those to the cryo-EM support team."
-  } > "${HOME}/Desktop/CRYOSPARC-FAILED-TO-START.txt" 2>/dev/null || true
+  } > "${CRYOSPARC_DESKTOP_DIR:-${HOME}/Desktop}/CRYOSPARC-FAILED-TO-START.txt" 2>/dev/null || true
 fi
 
 ###
@@ -218,7 +240,24 @@ if [ "${CRYOSPARC_LOCAL_WORKER}" == "1" ]; then
 fi
 
 ###
+# create firefox startup
+###
+export CRYOSPARC_BASE_PORT=$(cat ${CRYOSPARC_DATADIR}/config.sh | awk '/CRYOSPARC_BASE_PORT/{ split($2,a,"="); print a[2] }')
+echo "/usr/bin/firefox http://localhost:${CRYOSPARC_BASE_PORT}" > ${LSCRATCH}/cryosparc_launcher.sh
+if [ -n "${CRYOSPARC_DESKTOP_DIR}" ]; then
+  cp /cryosparc.desktop "${CRYOSPARC_DESKTOP_DIR}/cryosparc.desktop"
+  chmod +x "${CRYOSPARC_DESKTOP_DIR}/cryosparc.desktop"
+  ln -sfn ${LSCRATCH}/cryosparc_launcher.sh "${CRYOSPARC_DESKTOP_DIR}/cryosparc_launcher.sh"
+else
+  echo "WARNING: no writable desktop directory; the CryoSPARC launcher icon was not created."
+  echo "WARNING: open http://localhost:${CRYOSPARC_BASE_PORT} in the browser instead."
+fi
+
+###
 # monitor forever
+#
+# This loop never returns, so it has to stay last -- it previously sat ahead of
+# the launcher-icon setup, which therefore never ran when CRYOSPARC_TAIL_LOGS=1.
 ###
 if [ "$CRYOSPARC_TAIL_LOGS" == "1" ]; then
   echo "tailing logs..."
@@ -226,12 +265,3 @@ if [ "$CRYOSPARC_TAIL_LOGS" == "1" ]; then
     tail -f ${CRYOSPARC_MASTER_DIR}/run/command_core.log
   done
 fi
-
-###
-# create firefox startup
-###
-export CRYOSPARC_BASE_PORT=$(cat ${CRYOSPARC_DATADIR}/config.sh | awk '/CRYOSPARC_BASE_PORT/{ split($2,a,"="); print a[2] }')
-echo "/usr/bin/firefox http://localhost:${CRYOSPARC_BASE_PORT}" > ${LSCRATCH}/cryosparc_launcher.sh
-cp /cryosparc.desktop ${HOME}/Desktop/cryosparc.desktop
-chmod +x ${HOME}/Desktop/cryosparc.desktop
-ln -sfn ${LSCRATCH}/cryosparc_launcher.sh "${HOME}/Desktop/cryosparc_launcher.sh"

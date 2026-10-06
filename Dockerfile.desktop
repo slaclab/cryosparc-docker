@@ -77,6 +77,26 @@ RUN if [ ! -z "${CRYOSPARC_PATCH}" ]; then wget https://get.cryosparc.com/patch_
   && tar -vxzf ${CRYOSPARC_ROOT_DIR}/cryosparc_worker_patch.tar.gz --overwrite --strip-components=1 --directory=${CRYOSPARC_WORKER_DIR} \
   && rm -f ${CRYOSPARC_ROOT_DIR}/cryosparc_worker_patch.tar.gz; fi
 
+# Master and worker must report identical version strings, or every job fails at
+# launch with:
+#   AssertionError: Version mismatch! Worker version (v5.0.7) and Master version
+#   (v5.0.7+260921) are not the same. Please update.
+# The v5.0.7 downloads disagree out of the box: master-v5.0.7 ships a `patch`
+# file (260921), worker-v5.0.7 does not, even though both are revision
+# dfcba2f3. The patch is not cosmetic -- it replaces compute/cache.py,
+# core/jobs.py, core/sessions.py and a compiled extract module -- so the worker
+# needs the real patch applied, not just the metadata file copied over.
+# Build with CRYOSPARC_PATCH set (see Makefile) and assert the result here.
+RUN set -e; \
+    mver="$(cat ${CRYOSPARC_MASTER_DIR}/version)$(test -f ${CRYOSPARC_MASTER_DIR}/patch && echo "+$(cat ${CRYOSPARC_MASTER_DIR}/patch)" || true)"; \
+    wver="$(cat ${CRYOSPARC_WORKER_DIR}/version)$(test -f ${CRYOSPARC_WORKER_DIR}/patch && echo "+$(cat ${CRYOSPARC_WORKER_DIR}/patch)" || true)"; \
+    echo "VERSION_CHECK: master=${mver} worker=${wver}"; \
+    if [ "${mver}" != "${wver}" ]; then \
+      echo "ERROR: master/worker version mismatch. Set CRYOSPARC_PATCH to the master's"; \
+      echo "ERROR: patch level (cat cryosparc_master/patch) and rebuild."; \
+      exit 1; \
+    fi
+
 # compile libtiff
 # v5 replaced the Anaconda layout with a conda-packed env under .pixi/envs/<mode>
 # (install_python.sh explicitly deletes deps/anaconda as a "legacy folder name"),

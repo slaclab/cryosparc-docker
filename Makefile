@@ -1,5 +1,9 @@
 CRYOSPARC_VERSION ?= 5.0.7
-CRYOSPARC_PATCH ?= 
+# The v5.0.7 master tarball ships pre-patched (it contains a `patch` file reading
+# 260921) but the worker tarball does not, so they disagree on their version
+# string and every job dies at launch with "Version mismatch!". Setting the patch
+# here makes the build apply the official patch to BOTH sides.
+CRYOSPARC_PATCH ?= 260921
 CRYOSPARC_RELEASE ?= 0
 CONTAINER_RUNTIME ?= podman
 IMAGE ?= slaclab/cryosparc-desktop
