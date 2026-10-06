@@ -37,6 +37,20 @@ LOG_FILE="${LOG_DIR}/v5_migration_$(date +%Y%m%d_%H%M%S).log"
 DESKTOP_DIR=${CRYOSPARC_DESKTOP_DIR:-${LSCRATCH:+${LSCRATCH}/Desktop}}
 NOTICE="${DESKTOP_DIR:-${HOME}/Desktop}/CRYOSPARC-MIGRATION.txt"
 
+# Be usable standalone (e.g. run by an administrator) and not only via
+# cryosparc.sh, which is what normally puts cryosparcm on PATH. Without this the
+# script fails late with a bare "cryosparcm: command not found".
+case ":${PATH}:" in
+    *":${CRYOSPARC_MASTER_DIR}/bin:"*) ;;
+    *) PATH="${CRYOSPARC_MASTER_DIR}/bin:${PATH}"; export PATH ;;
+esac
+
+case "${V5_DATADIR}" in
+    /*) ;;
+    *)  echo "CRYOSPARC_DATADIR must be an absolute path; got '${V5_DATADIR}'" >&2
+        exit 1 ;;
+esac
+
 mkdir -p "${LOG_DIR}"
 
 log() { echo "$(date +'%Y-%m-%d %H:%M:%S') [migrate] $*" | tee -a "${LOG_FILE}"; }
@@ -86,6 +100,20 @@ case "$(get_state)" in
         rm -f "${NOTICE}"
         exit 0
         ;;
+    seeded)
+        # The database was copied but the upgrade never completed -- the session
+        # was killed, the node failed, or Slurm timed out partway through. The
+        # copy is disposable and the v4 original was never written to, so discard
+        # the half-migrated copy and start again. Without this the next launch
+        # falls through to the guard below and misreports the interrupted copy as
+        # "a database not created by this v5 setup", which is both wrong and
+        # impossible for a user to act on.
+        log "A previous migration was interrupted after copying the database but"
+        log "before the upgrade finished. Discarding the incomplete copy and"
+        log "starting over; your v4 database was never modified."
+        rm -rf "${V5_DBPATH}"
+        rm -f "${STATE_FILE}"
+        ;;
     failed)
         log "A previous migration attempt failed; refusing to start CryoSPARC."
         log "Inspect ${V5_DATADIR} and remove ${STATE_FILE} to retry."
@@ -111,11 +139,20 @@ ever read. Nothing has been changed."
     exit 1
 fi
 
-# Guard: the v5 directory already holds a database that this script never
-# created. Most likely the user pointed 'CryoSPARC Datadir' at their existing v4
-# directory. We cannot tell a v4 database from a v5 one without starting it, and
-# running v5 against un-upgraded v4 data risks corrupting it -- which is exactly
-# what the CryoSPARC guide warns against -- so refuse rather than guess.
+# Guard: a database exists here that we have no record of creating.
+#
+# This does NOT inspect the database. It tests "non-empty cryosparc_database AND
+# no completed-migration marker" -- the `done` and `seeded` states above have
+# already returned or reset by this point, so reaching here means this script has
+# never finished a migration into this directory. Telling a v4 database from a v5
+# one for real would mean starting mongod and reading `running_version` from the
+# config collection; we deliberately do not, because running v5 against
+# un-upgraded v4 data is the specific thing the CryoSPARC guide warns against.
+#
+# The trade-off: a genuine v5 database that this script did not create (a
+# restored backup, a copied datadir, a hand-run instance) is also refused. That
+# is the safe direction, and such a database would fail the no-op check later
+# anyway with "database upgrade is not required for this version".
 if [ -d "${V5_DBPATH}" ] && [ -n "$(ls -A "${V5_DBPATH}" 2>/dev/null)" ]; then
     fail "'CryoSPARC Datadir' already contains a CryoSPARC database that was not
 created by this v5 setup:
