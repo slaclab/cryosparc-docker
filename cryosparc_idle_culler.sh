@@ -30,7 +30,8 @@ usage () {
 # unreadable status as "zero jobs" would cull sessions that are busy.
 #
 # "unknown" is decided from the unfiltered output, so a session whose only jobs
-# are queued still reports 0 (and is therefore cullable) rather than "unknown".
+# are queued or waiting still reports 0 (and is therefore cullable) rather than
+# being mistaken for a status we could not read.
 count_active_jobs () {
     local output parsed total
     output=$("${CRYOSPARCM}" job status 2>/dev/null)
@@ -41,12 +42,18 @@ count_active_jobs () {
         return
     fi
 
-    # Sum every reported status except "queued". Matching the remaining statuses
-    # generically rather than listing them means a new alive status introduced by
-    # a future CryoSPARC release is counted automatically, which errs towards
-    # keeping a busy session rather than culling it.
+    # Sum every reported status except "queued" and "waiting", neither of which
+    # means work is actually progressing: a job whose ancestor failed sits queued
+    # forever, and a job can sit waiting for hours with nobody at the keyboard.
+    # Counting either as activity keeps the session -- and its GPUs -- alive for
+    # work that may never start. That leaves launched, started and running.
+    #
+    # The remaining statuses are matched generically rather than listed, so a new
+    # active status introduced by a future CryoSPARC release is counted
+    # automatically. That errs towards keeping a busy session rather than culling
+    # one, which is the safer direction for this check to be wrong in.
     total=$(printf '%s\n' "${output}" \
-        | grep -v '^Jobs queued:' \
+        | grep -vE '^Jobs (queued|waiting):' \
         | sed -n 's/^Jobs [a-z]\{1,\}:[[:space:]]*\([0-9]\{1,\}\).*$/\1/p' \
         | awk '{s+=$1} END {print s+0}')
     echo "${total}"
